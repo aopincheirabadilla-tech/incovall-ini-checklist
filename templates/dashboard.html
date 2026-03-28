@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – INCOVALL{% endblock %}
+
+{% block content %}
+
+<!-- ══ Título + Filtros ════════════════════════════════════════════════════ -->
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0">
+    <i class="bi bi-bar-chart-line-fill text-primary me-2"></i>Panel de Jefatura
+  </h4>
+  <span class="badge bg-secondary fs-6">
+    {{ fecha_desde }} → {{ fecha_hasta }}
+    {% if faena_filter %} &nbsp;|&nbsp; {{ faena_filter }}{% endif %}
+  </span>
+</div>
+
+<!-- Filtros -->
+<div class="card shadow-sm mb-4 border-0" style="background:#f0f4ff;">
+  <div class="card-body py-2">
+    <form method="GET" action="/dashboard" class="row g-2 align-items-end">
+      {% if current_user.is_admin() %}
+      <div class="col-12 col-sm-6 col-md-3">
+        <label class="form-label fw-semibold small mb-1">Faena</label>
+        <select name="faena" class="form-select form-select-sm">
+          <option value="">Todas las faenas</option>
+          {% for f in faenas %}
+          <option value="{{ f }}" {{ 'selected' if faena_filter == f }}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-6 col-md-3">
+        <label class="form-label fw-semibold small mb-1">Desde</label>
+        <input type="date" name="fecha_desde" class="form-control form-control-sm"
+               value="{{ fecha_desde }}">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label fw-semibold small mb-1">Hasta</label>
+        <input type="date" name="fecha_hasta" class="form-control form-control-sm"
+               value="{{ fecha_hasta }}">
+      </div>
+      <div class="col-12 col-sm-auto d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold px-3">
+          <i class="bi bi-search"></i> Aplicar
+        </button>
+        <a href="/dashboard" class="btn btn-outline-secondary btn-sm" title="Resetear">
+          <i class="bi bi-arrow-counterclockwise"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══ Tarjetas KPI ════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="kpi-card kpi-azul">
+      <div class="kpi-icon"><i class="bi bi-clipboard2-check-fill"></i></div>
+      <div class="kpi-num">{{ data.total_inspecciones }}</div>
+      <div class="kpi-label">Inspecciones</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="kpi-card kpi-rojo">
+      <div class="kpi-icon"><i class="bi bi-x-circle-fill"></i></div>
+      <div class="kpi-num">{{ data.total_no }}</div>
+      <div class="kpi-label">Ítems en NO</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="kpi-card kpi-verde">
+      <div class="kpi-icon"><i class="bi bi-building-fill"></i></div>
+      <div class="kpi-num">{{ data.recintos_count }}</div>
+      <div class="kpi-label">Recintos</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="kpi-card kpi-naranja">
+      <div class="kpi-icon"><i class="bi bi-people-fill"></i></div>
+      <div class="kpi-num">{{ data.inspectores_activos }}</div>
+      <div class="kpi-label">Inspectores</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Fila superior: barras + torta ══════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+
+  <!-- Gráfico de barras: Top 10 ítems con más fallas -->
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-header dash-card-header">
+        <i class="bi bi-bar-chart-fill me-2"></i>Top ítems con más fallas (NO)
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center"
+           style="min-height:280px;">
+        {% if data.top_items %}
+        <div style="width:100%; height:100%;">
+          <canvas id="chartBarFallas"></canvas>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-bar-chart fs-1 opacity-25"></i>
+          <p class="mt-2">Sin datos para el período seleccionado</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráfico de torta: Distribución SI/NO/N/A -->
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header dash-card-header">
+        <i class="bi bi-pie-chart-fill me-2"></i>Distribución de respuestas
+      </div>
+      <div class="card-body d-flex flex-column align-items-center justify-content-center"
+           style="min-height:280px;">
+        {% set total_resp = data.dist.SI + data.dist.NO + data.dist['N/A'] %}
+        {% if total_resp > 0 %}
+        <div style="max-width:240px; width:100%;">
+          <canvas id="chartTorta"></canvas>
+        </div>
+        <div class="d-flex gap-3 mt-3 flex-wrap justify-content-center">
+          <span class="dash-legend-dot" style="--c:#2e7d32;">
+            SI <strong>{{ data.dist.SI }}</strong>
+            <small class="text-muted">({{ (data.dist.SI / total_resp * 100) | round(1) }}%)</small>
+          </span>
+          <span class="dash-legend-dot" style="--c:#c62828;">
+            NO <strong>{{ data.dist.NO }}</strong>
+            <small class="text-muted">({{ (data.dist.NO / total_resp * 100) | round(1) }}%)</small>
+          </span>
+          <span class="dash-legend-dot" style="--c:#757575;">
+            N/A <strong>{{ data.dist['N/A'] }}</strong>
+            <small class="text-muted">({{ (data.dist['N/A'] / total_resp * 100) | round(1) }}%)</small>
+          </span>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-pie-chart fs-1 opacity-25"></i>
+          <p class="mt-2">Sin datos para el período seleccionado</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ Gráfico de línea: evolución semanal ════════════════════════════════ -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header dash-card-header">
+    <i class="bi bi-graph-up me-2"></i>Evolución de inspecciones por semana
+  </div>
+  <div class="card-body" style="min-height:200px;">
+    <canvas id="chartLinea" style="max-height:200px;"></canvas>
+  </div>
+</div>
+
+<!-- ══ Fila inferior: recintos críticos + por faena ══════════════════════ -->
+<div class="row g-3 mb-4">
+
+  <!-- Tabla recintos críticos -->
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-header dash-card-header">
+        <i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>Recintos críticos
+        <small class="opacity-75">(más ítems en NO)</small>
+      </div>
+      {% if data.recintos_criticos %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead style="background:#1a3a5c; color:white;" class="small">
+            <tr>
+              <th>#</th>
+              <th>Recinto</th>
+              <th>Faena</th>
+              <th class="text-end">Ítems NO</th>
+              <th class="text-end d-none d-sm-table-cell">Nivel</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set max_no = data.recintos_criticos[0]['total_no'] %}
+            {% for r in data.recintos_criticos %}
+            {% set pct = (r['total_no'] / max_no * 100) | int %}
+            <tr>
+              <td class="text-muted small">{{ loop.index }}</td>
+              <td class="fw-semibold">{{ r['nombre_recinto'] }}</td>
+              <td><span class="badge bg-secondary">{{ r['faena'] or '—' }}</span></td>
+              <td class="text-end">
+                <span class="badge
+                  {% if pct >= 75 %}bg-danger
+                  {% elif pct >= 40 %}bg-warning text-dark
+                  {% else %}bg-success{% endif %} fs-6">
+                  {{ r['total_no'] }}
+                </span>
+              </td>
+              <td class="d-none d-sm-table-cell" style="min-width:90px;">
+                <div class="progress" style="height:8px;">
+                  <div class="progress-bar
+                    {% if pct >= 75 %}bg-danger
+                    {% elif pct >= 40 %}bg-warning
+                    {% else %}bg-success{% endif %}"
+                    style="width:{{ pct }}%;"></div>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-check-circle fs-2 text-success opacity-50"></i>
+        <p class="mt-2 mb-0">Sin recintos críticos en el período</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Inspecciones por faena (solo admin) -->
+  {% if current_user.is_admin() and data.por_faena %}
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header dash-card-header">
+        <i class="bi bi-buildings-fill me-2"></i>Inspecciones por faena
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center"
+           style="min-height:220px;">
+        <div style="width:100%;">
+          <canvas id="chartFaenas"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+/* ── Colores corporativos INCOVALL ───────────────────────────── */
+const C_AZUL   = '#1a3a5c';
+const C_AZUL2  = '#1565C0';
+const C_VERDE  = '#2e7d32';
+const C_VERDE2 = '#43A047';
+const C_ROJO   = '#c62828';
+const C_ROJO2  = '#EF5350';
+const C_GRIS   = '#757575';
+const C_NARANJA= '#E65100';
+
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size   = 12;
+Chart.defaults.color       = '#444';
+
+/* ── Helper: degradado vertical ─────────────────────────────── */
+function gradiente(ctx, c1, c2) {
+  const g = ctx.createLinearGradient(0, 0, 0, 300);
+  g.addColorStop(0,   c1);
+  g.addColorStop(1,   c2);
+  return g;
+}
+
+/* ── 1. Gráfico de barras: Top 10 ítems con más NO ──────────── */
+{% if data.top_items %}
+(function() {
+  const labels = {{ data.top_items | map(attribute=0) | list | tojson }};
+  const vals   = {{ data.top_items | map(attribute=1) | list | tojson }};
+  const ctx    = document.getElementById('chartBarFallas').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Fallas (NO)',
+        data: vals,
+        backgroundColor: gradiente(ctx, C_ROJO, C_ROJO2),
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.x} falla${ctx.parsed.x !== 1 ? 's' : ''}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, precision: 0 },
+          grid: { color: '#eee' },
+        },
+        y: {
+          ticks: {
+            font: { size: 11 },
+            callback: function(val) {
+              const label = this.getLabelForValue(val);
+              return label.length > 22 ? label.slice(0, 20) + '…' : label;
+            }
+          },
+          grid: { display: false },
+        }
+      }
+    }
+  });
+})();
+{% endif %}
+
+/* ── 2. Gráfico de torta: SI / NO / N/A ─────────────────────── */
+{% if (data.dist.SI + data.dist.NO + data.dist['N/A']) > 0 %}
+(function() {
+  const ctx = document.getElementById('chartTorta').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['SI', 'NO', 'N/A'],
+      datasets: [{
+        data: [{{ data.dist.SI }}, {{ data.dist.NO }}, {{ data.dist['N/A'] }}],
+        backgroundColor: [C_VERDE, C_ROJO, C_GRIS],
+        hoverBackgroundColor: [C_VERDE2, C_ROJO2, '#9E9E9E'],
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '62%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed} (${
+              (ctx.parsed / ({{ data.dist.SI }} + {{ data.dist.NO }} + {{ data.dist['N/A'] }}) * 100).toFixed(1)
+            }%)`
+          }
+        }
+      }
+    }
+  });
+})();
+{% endif %}
+
+/* ── 3. Gráfico de línea: inspecciones por semana ───────────── */
+(function() {
+  const labels = {{ data.semanas_labels | tojson }};
+  const vals   = {{ data.semanas_vals   | tojson }};
+  const ctx    = document.getElementById('chartLinea').getContext('2d');
+  const fill   = gradiente(ctx, 'rgba(26,58,92,0.25)', 'rgba(26,58,92,0.02)');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Inspecciones',
+        data: vals,
+        borderColor: C_AZUL,
+        backgroundColor: fill,
+        borderWidth: 2.5,
+        pointBackgroundColor: C_AZUL2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: true,
+        tension: 0.35,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.y} inspección${ctx.parsed.y !== 1 ? 'es' : ''}`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, precision: 0 },
+          grid: { color: '#eee' },
+        },
+        x: {
+          ticks: { font: { size: 10 }, maxRotation: 30, minRotation: 15 },
+          grid: { display: false },
+        }
+      }
+    }
+  });
+})();
+
+/* ── 4. Barras: inspecciones por faena (admin) ───────────────── */
+{% if current_user.is_admin() and data.por_faena %}
+(function() {
+  const labels = {{ data.por_faena | map(attribute=0) | list | tojson }};
+  const vals   = {{ data.por_faena | map(attribute=1) | list | tojson }};
+  const ctx    = document.getElementById('chartFaenas').getContext('2d');
+  const bgs    = [C_AZUL, C_VERDE, C_NARANJA, C_ROJO, C_GRIS, C_AZUL2];
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Inspecciones',
+        data: vals,
+        backgroundColor: labels.map((_, i) => bgs[i % bgs.length]),
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, precision: 0 },
+          grid: { color: '#eee' },
+        },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+})();
+{% endif %}
+</script>
+{% endblock %}

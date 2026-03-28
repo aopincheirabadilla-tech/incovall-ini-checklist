@@ -188,6 +188,79 @@ body {
   border-radius: 12px 12px 0 0 !important;
 }
 
+/* ══ Dashboard ═══════════════════════════════════════════════════════════════ */
+
+/* Encabezado de tarjeta del dashboard */
+.dash-card-header {
+  background: #1a3a5c;
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.6rem 1rem;
+  border-radius: 12px 12px 0 0 !important;
+}
+
+/* Tarjetas KPI */
+.kpi-card {
+  border-radius: 14px;
+  padding: 1.1rem 1rem 0.9rem;
+  color: white;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: -18px; right: -18px;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+}
+
+.kpi-azul    { background: linear-gradient(135deg, #1a3a5c, #1565C0); }
+.kpi-rojo    { background: linear-gradient(135deg, #7f0000, #c62828); }
+.kpi-verde   { background: linear-gradient(135deg, #1B5E20, #2e7d32); }
+.kpi-naranja { background: linear-gradient(135deg, #BF360C, #E65100); }
+
+.kpi-icon { font-size: 1.7rem; opacity: 0.85; margin-bottom: 0.2rem; }
+.kpi-num  {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -1px;
+}
+.kpi-label {
+  font-size: 0.78rem;
+  opacity: 0.88;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 0.15rem;
+}
+
+@media (max-width: 575px) {
+  .kpi-num   { font-size: 1.8rem; }
+  .kpi-label { font-size: 0.72rem; }
+  .kpi-card  { padding: 0.9rem 0.6rem 0.75rem; }
+}
+
+/* Leyenda de la torta */
+.dash-legend-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.82rem;
+}
+.dash-legend-dot::before {
+  content: '';
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--c);
+  flex-shrink: 0;
+}
+
 /* ══ Badge de correlativo ════════════════════════════════════════════════════ */
 #badge-corr {
   font-family: 'Consolas', monospace;

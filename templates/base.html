@@ -45,15 +45,21 @@
       <div class="vr bg-white opacity-25 mx-1 d-none d-sm-block" style="height:32px;"></div>
 
       <!-- Navegación principal -->
-      <a href="/" class="btn btn-outline-light btn-sm">
+      <a href="/" class="btn btn-outline-light btn-sm {% if request.path == '/' %}active{% endif %}">
         <i class="bi bi-plus-circle"></i> <span class="d-none d-md-inline">Nueva</span>
       </a>
-      <a href="/historial" class="btn btn-outline-light btn-sm">
+      <a href="/historial" class="btn btn-outline-light btn-sm {% if request.path.startswith('/historial') or request.path.startswith('/detalle') %}active{% endif %}">
         <i class="bi bi-clock-history"></i> <span class="d-none d-md-inline">Historial</span>
       </a>
 
+      {% if current_user.is_supervisor() %}
+      <a href="/dashboard" class="btn btn-outline-light btn-sm {% if request.path == '/dashboard' %}active{% endif %}">
+        <i class="bi bi-bar-chart-line"></i> <span class="d-none d-md-inline">Dashboard</span>
+      </a>
+      {% endif %}
+
       {% if current_user.is_admin() %}
-      <a href="/admin/usuarios" class="btn btn-warning btn-sm fw-semibold">
+      <a href="/admin/usuarios" class="btn btn-warning btn-sm fw-semibold {% if request.path.startswith('/admin') %}active{% endif %}">
         <i class="bi bi-people"></i> <span class="d-none d-md-inline">Usuarios</span>
       </a>
       {% endif %}

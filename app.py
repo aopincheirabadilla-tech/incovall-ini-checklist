@@ -239,6 +239,106 @@ def _save_foto(file_storage, correlativo, item_idx):
         return None
 
 
+# ─── Dashboard helpers ───────────────────────────────────────────────────────
+
+def _build_where(faena_filter, fecha_desde, fecha_hasta, alias='i'):
+    """Devuelve (cláusula WHERE str, lista de parámetros) para filtros del dashboard."""
+    clauses, params = [], []
+    if faena_filter:
+        clauses.append(f"{alias}.faena = ?"); params.append(faena_filter)
+    if fecha_desde:
+        clauses.append(f"{alias}.fecha >= ?"); params.append(fecha_desde)
+    if fecha_hasta:
+        clauses.append(f"{alias}.fecha <= ?"); params.append(fecha_hasta)
+    return ("WHERE " + " AND ".join(clauses)) if clauses else "", params
+
+
+def _dashboard_data(faena_filter, fecha_desde, fecha_hasta):
+    """Devuelve dict con todas las estadísticas para el dashboard."""
+    from datetime import timedelta
+    conn = get_db()
+
+    wh,  wp  = _build_where(faena_filter, fecha_desde, fecha_hasta, alias='i')
+    # WHERE para JOIN con items (agrega c.valor='NO' al final)
+    no_clauses = []
+    no_params  = []
+    if faena_filter: no_clauses.append("i.faena = ?");  no_params.append(faena_filter)
+    if fecha_desde:  no_clauses.append("i.fecha >= ?"); no_params.append(fecha_desde)
+    if fecha_hasta:  no_clauses.append("i.fecha <= ?"); no_params.append(fecha_hasta)
+    no_clauses.append("c.valor = 'NO'")
+    wh_no = "WHERE " + " AND ".join(no_clauses)
+
+    # ── 1. Tarjetas ───────────────────────────────────────────────────────────
+    total_inspecciones = conn.execute(
+        f"SELECT COUNT(*) FROM inspecciones i {wh}", wp).fetchone()[0]
+    total_no = conn.execute(
+        f"SELECT COUNT(*) FROM items_checklist c "
+        f"JOIN inspecciones i ON c.inspeccion_id=i.id {wh_no}", no_params).fetchone()[0]
+    recintos_count = conn.execute(
+        f"SELECT COUNT(DISTINCT nombre_recinto) FROM inspecciones i {wh}", wp).fetchone()[0]
+    inspectores_activos = conn.execute(
+        f"SELECT COUNT(DISTINCT nombre_inspector) FROM inspecciones i {wh}", wp).fetchone()[0]
+
+    # ── 2. Top 10 ítems con más NO ────────────────────────────────────────────
+    top_items = conn.execute(
+        f"SELECT c.item, COUNT(*) AS cnt FROM items_checklist c "
+        f"JOIN inspecciones i ON c.inspeccion_id=i.id {wh_no} "
+        f"GROUP BY c.item ORDER BY cnt DESC LIMIT 10", no_params).fetchall()
+
+    # ── 3. Distribución SI / NO / N/A ─────────────────────────────────────────
+    # Reutilizar wp sin el filtro de valor
+    dist_rows = conn.execute(
+        f"SELECT c.valor, COUNT(*) AS cnt FROM items_checklist c "
+        f"JOIN inspecciones i ON c.inspeccion_id=i.id {wh} "
+        f"GROUP BY c.valor", wp).fetchall()
+    dist = {'SI': 0, 'NO': 0, 'N/A': 0}
+    for r in dist_rows:
+        if r['valor'] in dist:
+            dist[r['valor']] = r['cnt']
+
+    # ── 4. Inspecciones por semana (últimas 8 semanas) ────────────────────────
+    ref_date = datetime.strptime(fecha_hasta, '%Y-%m-%d') if fecha_hasta else datetime.now()
+    semanas_labels, semanas_vals = [], []
+    for w in range(7, -1, -1):
+        week_end   = ref_date - timedelta(weeks=w)
+        week_start = week_end - timedelta(days=6)
+        w_clauses = ["fecha BETWEEN ? AND ?"]
+        w_params  = [week_start.strftime('%Y-%m-%d'), week_end.strftime('%Y-%m-%d')]
+        if faena_filter:
+            w_clauses.append("faena = ?"); w_params.append(faena_filter)
+        cnt = conn.execute(
+            "SELECT COUNT(*) FROM inspecciones WHERE " + " AND ".join(w_clauses),
+            w_params).fetchone()[0]
+        semanas_labels.append(f"{week_start.strftime('%d/%m')}–{week_end.strftime('%d/%m')}")
+        semanas_vals.append(cnt)
+
+    # ── 5. Recintos críticos ──────────────────────────────────────────────────
+    recintos_criticos = conn.execute(
+        f"SELECT i.nombre_recinto, i.faena, COUNT(*) AS total_no "
+        f"FROM items_checklist c JOIN inspecciones i ON c.inspeccion_id=i.id "
+        f"{wh_no} GROUP BY i.nombre_recinto, i.faena "
+        f"ORDER BY total_no DESC LIMIT 15", no_params).fetchall()
+
+    # ── 6. Inspecciones por faena ─────────────────────────────────────────────
+    por_faena = conn.execute(
+        f"SELECT faena, COUNT(*) AS cnt FROM inspecciones i {wh} "
+        f"GROUP BY faena ORDER BY cnt DESC", wp).fetchall()
+
+    conn.close()
+    return {
+        'total_inspecciones':  total_inspecciones,
+        'total_no':            total_no,
+        'recintos_count':      recintos_count,
+        'inspectores_activos': inspectores_activos,
+        'top_items':           [(r['item'], r['cnt']) for r in top_items],
+        'dist':                dist,
+        'semanas_labels':      semanas_labels,
+        'semanas_vals':        semanas_vals,
+        'recintos_criticos':   recintos_criticos,
+        'por_faena':           [(r['faena'], r['cnt']) for r in por_faena],
+    }
+
+
 # ─── Auth Routes ─────────────────────────────────────────────────────────────
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -432,6 +532,37 @@ def detalle(inspeccion_id):
                            insp=insp,
                            items_by_sec=items_by_sec,
                            secciones=SECCIONES)
+
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    if not current_user.is_supervisor():
+        flash('Acceso restringido a Supervisores y Administradores.', 'danger')
+        return redirect(url_for('index'))
+
+    # Filtros
+    faena_filter = request.args.get('faena', '').strip()
+    fecha_desde  = request.args.get('fecha_desde', '').strip()
+    fecha_hasta  = request.args.get('fecha_hasta', '').strip()
+
+    # Supervisor solo puede ver su propia faena
+    if current_user.rol == 'supervisor':
+        faena_filter = current_user.faena
+
+    # Defaults: mes actual si no hay filtro de fecha
+    if not fecha_desde and not fecha_hasta:
+        now = datetime.now()
+        fecha_desde = now.strftime('%Y-%m-01')
+        fecha_hasta = now.strftime('%Y-%m-%d')
+
+    data = _dashboard_data(faena_filter or None, fecha_desde, fecha_hasta)
+    return render_template('dashboard.html',
+                           data=data,
+                           faenas=FAENAS,
+                           faena_filter=faena_filter,
+                           fecha_desde=fecha_desde,
+                           fecha_hasta=fecha_hasta)
 
 
 @app.route('/pdf/<int:inspeccion_id>')
