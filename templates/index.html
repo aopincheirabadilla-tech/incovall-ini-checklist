@@ -2,7 +2,8 @@
 {% block title %}Nueva Inspección – INCOVALL{% endblock %}
 
 {% block content %}
-<form id="formInspeccion" method="POST" action="/guardar">
+<!-- IMPORTANTE: enctype multipart/form-data para subir fotos -->
+<form id="formInspeccion" method="POST" action="/guardar" enctype="multipart/form-data">
 
   <!-- ══ Encabezado ══════════════════════════════════════════════════════ -->
   <div class="card shadow-sm mb-3">
@@ -66,8 +67,7 @@
   {% for seccion, items in secciones.items() %}
 
   <div class="card shadow-sm mb-3">
-    <div class="card-header text-white fw-bold fs-6"
-         style="background:#1565C0;">
+    <div class="card-header text-white fw-bold fs-6" style="background:#1565C0;">
       {% if seccion == 'SISTEMA SANITARIO' %}<i class="bi bi-droplet-half"></i>
       {% elif seccion == 'SISTEMA ELÉCTRICO' %}<i class="bi bi-lightning-charge"></i>
       {% elif seccion == 'INFRAESTRUCTURA GENERAL' %}<i class="bi bi-building"></i>
@@ -76,7 +76,6 @@
       {{ seccion }}
     </div>
 
-    <!-- Encabezado de columnas (solo escritorio) -->
     <div class="d-none d-md-flex checklist-header px-3 py-1 border-bottom bg-light small fw-bold text-muted">
       <div style="flex:1">Ítem</div>
       <div class="text-center" style="width:80px">SI</div>
@@ -88,7 +87,7 @@
     <div class="card-body p-0">
       {% for item in items %}
       {% set i = ns.idx %}
-      <div class="checklist-row {% if loop.index % 2 == 0 %}bg-fila{% endif %}">
+      <div class="checklist-row {% if loop.index % 2 == 0 %}bg-fila{% endif %}" id="fila-{{ i }}">
 
         <!-- Nombre del ítem -->
         <div class="item-name">{{ item }}</div>
@@ -114,6 +113,51 @@
                  placeholder="Comentario opcional…"
                  autocomplete="off">
         </div>
+
+        <!-- ── Zona de foto (visible solo cuando valor = NO) ── -->
+        <div class="foto-upload-zone d-none w-100" id="foto-zone-{{ i }}">
+          <div class="foto-upload-inner">
+            <div class="d-flex gap-2 flex-wrap">
+              <!-- Botón principal: cámara (celular) o archivo (escritorio) -->
+              <label class="btn btn-foto-cam flex-fill" for="foto-cam-{{ i }}">
+                <i class="bi bi-camera-fill"></i>
+                <span class="d-none d-sm-inline"> Tomar foto</span>
+                <span class="d-sm-none"> Cámara</span>
+                <input type="file" id="foto-cam-{{ i }}" name="foto_{{ i }}"
+                       accept="image/jpeg,image/png,image/webp"
+                       capture="environment"
+                       class="d-none"
+                       onchange="previewFoto(this, {{ i }})">
+              </label>
+              <!-- Botón secundario: elegir archivo -->
+              <label class="btn btn-foto-file" for="foto-file-{{ i }}">
+                <i class="bi bi-image"></i>
+                <span class="d-none d-sm-inline"> Archivo</span>
+                <input type="file" id="foto-file-{{ i }}"
+                       accept="image/jpeg,image/png,image/webp"
+                       class="d-none"
+                       onchange="copiarFoto(this, {{ i }})">
+              </label>
+            </div>
+
+            <!-- Preview de la foto seleccionada -->
+            <div id="foto-preview-{{ i }}" class="foto-preview-box d-none">
+              <div class="d-flex align-items-start gap-2">
+                <img id="foto-img-{{ i }}" src="" alt="Vista previa"
+                     class="foto-preview-img">
+                <div class="flex-grow-1">
+                  <p class="foto-preview-name mb-1" id="foto-nombre-{{ i }}"></p>
+                  <p class="foto-preview-size mb-2" id="foto-size-{{ i }}"></p>
+                  <button type="button" class="btn btn-sm btn-outline-danger"
+                          onclick="clearFoto({{ i }})">
+                    <i class="bi bi-trash"></i> Eliminar foto
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
       {% set ns.idx = ns.idx + 1 %}
       {% endfor %}
@@ -153,18 +197,20 @@
 
 </form>
 
-<!-- Barra de progreso flotante -->
+<!-- Overlay de progreso -->
 <div id="progreso-overlay" class="d-none">
   <div class="progreso-box">
     <div class="spinner-border text-primary mb-3" role="status"></div>
     <p class="fw-bold mb-1">Guardando inspección…</p>
-    <p class="text-muted small">Generando PDF, por favor espere.</p>
+    <p class="text-muted small">Procesando fotos y generando PDF, por favor espere.</p>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+const MAX_FOTO_BYTES = 5 * 1024 * 1024; // 5 MB
+
 /* ── Selección SI / NO / N/A ─────────────────────────────────────── */
 function elegir(btn, idx, valor) {
   const grupo = btn.closest('.item-buttons');
@@ -172,19 +218,82 @@ function elegir(btn, idx, valor) {
   btn.classList.add('activo');
   document.getElementById('val_' + idx).value = valor;
 
-  // Colorear la fila según selección
   const fila = btn.closest('.checklist-row');
   fila.classList.remove('fila-si', 'fila-no', 'fila-na');
   if (valor === 'SI')  fila.classList.add('fila-si');
   if (valor === 'NO')  fila.classList.add('fila-no');
   if (valor === 'N/A') fila.classList.add('fila-na');
+
+  // Mostrar/ocultar zona de foto
+  const fotoZone = document.getElementById('foto-zone-' + idx);
+  if (fotoZone) {
+    if (valor === 'NO') {
+      fotoZone.classList.remove('d-none');
+    } else {
+      fotoZone.classList.add('d-none');
+      clearFoto(idx);
+    }
+  }
 }
 
-/* ── Inicializar N/A como activo por defecto ────────────────────── */
+/* ── Preview desde input cámara ─────────────────────────────────── */
+function previewFoto(input, idx) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > MAX_FOTO_BYTES) {
+    alert('La foto supera el límite de 5 MB. Por favor elige una imagen más pequeña.');
+    input.value = '';
+    return;
+  }
+  mostrarPreview(file, idx);
+}
+
+/* ── Copiar archivo al input principal y mostrar preview ────────── */
+function copiarFoto(input, idx) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > MAX_FOTO_BYTES) {
+    alert('La foto supera el límite de 5 MB. Por favor elige una imagen más pequeña.');
+    input.value = '';
+    return;
+  }
+  // Transferir al input de cámara (que tiene el name="foto_{i}" que el servidor lee)
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const camInput = document.getElementById('foto-cam-' + idx);
+  camInput.files = dt.files;
+  mostrarPreview(file, idx);
+}
+
+/* ── Mostrar thumbnail + info ───────────────────────────────────── */
+function mostrarPreview(file, idx) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('foto-img-' + idx).src = e.target.result;
+    document.getElementById('foto-nombre-' + idx).textContent = file.name;
+    document.getElementById('foto-size-' + idx).textContent =
+      (file.size / 1024).toFixed(0) + ' KB';
+    document.getElementById('foto-preview-' + idx).classList.remove('d-none');
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ── Eliminar foto seleccionada ─────────────────────────────────── */
+function clearFoto(idx) {
+  const cam  = document.getElementById('foto-cam-'  + idx);
+  const file = document.getElementById('foto-file-' + idx);
+  if (cam)  cam.value  = '';
+  if (file) file.value = '';
+  const prev = document.getElementById('foto-preview-' + idx);
+  if (prev) prev.classList.add('d-none');
+  const img = document.getElementById('foto-img-' + idx);
+  if (img) img.src = '';
+}
+
+/* ── Inicializar N/A por defecto ────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.item-buttons').forEach(grupo => {
-    const btnNa = grupo.querySelector('.btn-na');
-    if (btnNa) btnNa.classList.add('activo');
+    grupo.querySelector('.btn-na')?.classList.add('activo');
   });
 });
 

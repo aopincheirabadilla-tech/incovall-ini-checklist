@@ -18,13 +18,11 @@
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label fw-semibold">Desde</label>
-          <input type="date" class="form-control" name="fecha_desde"
-                 value="{{ fecha_desde }}">
+          <input type="date" class="form-control" name="fecha_desde" value="{{ fecha_desde }}">
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label fw-semibold">Hasta</label>
-          <input type="date" class="form-control" name="fecha_hasta"
-                 value="{{ fecha_hasta }}">
+          <input type="date" class="form-control" name="fecha_hasta" value="{{ fecha_hasta }}">
         </div>
         <div class="col-12 col-md-2 d-flex gap-2">
           <button type="submit" class="btn btn-primary flex-fill fw-semibold">
@@ -60,7 +58,7 @@
             <th>Valle / Faena</th>
             <th>Inspector</th>
             <th>Cliente</th>
-            <th class="text-center">PDF</th>
+            <th class="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -73,11 +71,18 @@
             <td>{{ insp['nombre_inspector'] }}</td>
             <td>{{ insp['cliente'] }}</td>
             <td class="text-center">
-              <a href="/pdf/{{ insp['id'] }}"
-                 class="btn btn-sm btn-outline-danger fw-semibold"
-                 title="Descargar PDF">
-                <i class="bi bi-file-earmark-pdf"></i> PDF
-              </a>
+              <div class="d-flex gap-1 justify-content-center">
+                <a href="/detalle/{{ insp['id'] }}"
+                   class="btn btn-sm btn-outline-primary fw-semibold"
+                   title="Ver detalle y fotos">
+                  <i class="bi bi-eye"></i> Ver
+                </a>
+                <a href="/pdf/{{ insp['id'] }}"
+                   class="btn btn-sm btn-outline-danger fw-semibold"
+                   title="Descargar PDF">
+                  <i class="bi bi-file-earmark-pdf"></i> PDF
+                </a>
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -107,10 +112,16 @@
       <p class="mb-2 small text-muted">
         <i class="bi bi-building"></i> {{ insp['cliente'] }}
       </p>
-      <a href="/pdf/{{ insp['id'] }}"
-         class="btn btn-danger btn-sm w-100 fw-semibold">
-        <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
-      </a>
+      <div class="d-flex gap-2">
+        <a href="/detalle/{{ insp['id'] }}"
+           class="btn btn-primary btn-sm flex-fill fw-semibold">
+          <i class="bi bi-eye"></i> Ver detalle
+        </a>
+        <a href="/pdf/{{ insp['id'] }}"
+           class="btn btn-danger btn-sm flex-fill fw-semibold">
+          <i class="bi bi-file-earmark-pdf"></i> PDF
+        </a>
+      </div>
     </div>
   </div>
   {% endfor %}

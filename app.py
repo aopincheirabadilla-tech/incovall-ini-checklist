@@ -6,8 +6,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import sqlite3
 import os
+import io
 from datetime import datetime
 from io import BytesIO
+
+from PIL import Image as PILImage
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -19,6 +22,7 @@ from reportlab.graphics.shapes import Drawing, Rect, String as RLString
 
 app = Flask(__name__)
 app.secret_key = 'incovall-ini-2024-auth'
+app.config['MAX_CONTENT_LENGTH'] = 80 * 1024 * 1024  # 80 MB total por request
 
 # ─── Flask-Login ─────────────────────────────────────────────────────────────
 
@@ -27,8 +31,11 @@ login_manager.login_view = 'login'
 login_manager.login_message = 'Debes iniciar sesión para acceder.'
 login_manager.login_message_category = 'warning'
 
-ROLES = ['admin', 'supervisor', 'inspector']
+ROLES  = ['admin', 'supervisor', 'inspector']
 FAENAS = ['Planta Magnetita', 'PPT', 'CNN', 'Otra']
+ALLOWED_MIME = {'image/jpeg', 'image/png', 'image/webp'}
+ALLOWED_EXT  = {'jpg', 'jpeg', 'png', 'webp'}
+MAX_FOTO_BYTES = 5 * 1024 * 1024  # 5 MB por foto
 
 
 class User(UserMixin):
@@ -74,11 +81,21 @@ def admin_required(f):
     return decorated
 
 
+def _puede_ver_inspeccion(insp):
+    """True si el usuario actual tiene permiso para ver esta inspección."""
+    if current_user.is_admin():
+        return True
+    if current_user.rol == 'supervisor':
+        return insp['faena'] == current_user.faena
+    return insp['usuario_id'] == current_user.id
+
+
 # ─── Config ──────────────────────────────────────────────────────────────────
 
 BASE_DIR   = os.path.dirname(__file__)
 DATABASE   = os.path.join(BASE_DIR, 'inspecciones.db')
 STATIC_DIR = os.path.join(BASE_DIR, 'static')
+FOTOS_DIR  = os.path.join(STATIC_DIR, 'fotos')
 
 SECCIONES = {
     'SISTEMA SANITARIO': ['WC', 'Lavamanos', 'Duchas', 'Agua Fría', 'Agua Caliente', 'Termo', 'Filtraciones'],
@@ -88,7 +105,6 @@ SECCIONES = {
 }
 FLAT_ITEMS = [(s, item) for s, items in SECCIONES.items() for item in items]
 
-# Jinja2 filter
 @app.template_filter('seccion_icon')
 def seccion_icon(value):
     iconos = ['droplet-half', 'lightning-charge', 'building', 'pipe']
@@ -107,10 +123,10 @@ def get_db():
 
 
 def init_db():
+    os.makedirs(FOTOS_DIR, exist_ok=True)
     conn = get_db()
     c = conn.cursor()
 
-    # Tabla usuarios
     c.execute('''
         CREATE TABLE IF NOT EXISTS usuarios (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -125,7 +141,6 @@ def init_db():
         )
     ''')
 
-    # Tabla inspecciones
     c.execute('''
         CREATE TABLE IF NOT EXISTS inspecciones (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,12 +159,11 @@ def init_db():
         )
     ''')
 
-    # Migración: agregar usuario_id si no existe en tabla vieja
+    # Migración: usuario_id en inspecciones viejas
     cols = [r[1] for r in c.execute("PRAGMA table_info(inspecciones)").fetchall()]
     if 'usuario_id' not in cols:
         c.execute("ALTER TABLE inspecciones ADD COLUMN usuario_id INTEGER")
 
-    # Tabla items checklist
     c.execute('''
         CREATE TABLE IF NOT EXISTS items_checklist (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,21 +176,24 @@ def init_db():
         )
     ''')
 
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS fotos_items (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            inspeccion_id INTEGER NOT NULL,
+            item_idx      INTEGER NOT NULL,
+            filename      TEXT NOT NULL,
+            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (inspeccion_id) REFERENCES inspecciones(id)
+        )
+    ''')
+
     # Admin inicial
-    admin = c.execute("SELECT id FROM usuarios WHERE username='admin'").fetchone()
-    if not admin:
+    if not c.execute("SELECT id FROM usuarios WHERE username='admin'").fetchone():
         c.execute('''
             INSERT INTO usuarios (username, nombre_completo, email, password_hash, rol, faena, activo)
             VALUES (?,?,?,?,?,?,?)
-        ''', (
-            'admin',
-            'Administrador INCOVALL',
-            'admin@incovall.cl',
-            generate_password_hash('incovall2026'),
-            'admin',
-            None,
-            1,
-        ))
+        ''', ('admin', 'Administrador INCOVALL', 'admin@incovall.cl',
+              generate_password_hash('incovall2026'), 'admin', None, 1))
 
     conn.commit()
     conn.close()
@@ -191,6 +208,35 @@ def generate_correlativo():
     ).fetchone()
     conn.close()
     return f'INI-{year}-{row["n"] + 1:04d}'
+
+
+def _save_foto(file_storage, correlativo, item_idx):
+    """Valida, redimensiona y guarda una foto. Devuelve el filename o None."""
+    if not file_storage or not file_storage.filename:
+        return None
+
+    ext = file_storage.filename.rsplit('.', 1)[-1].lower() if '.' in file_storage.filename else ''
+    mime = file_storage.content_type or ''
+
+    if ext not in ALLOWED_EXT and mime not in ALLOWED_MIME:
+        return None
+
+    data = file_storage.read()
+    if len(data) > MAX_FOTO_BYTES:
+        return None
+
+    try:
+        img = PILImage.open(BytesIO(data))
+        img = img.convert('RGB')
+        img.thumbnail((1400, 1050), PILImage.LANCZOS)
+
+        safe_corr = correlativo.replace('/', '_').replace('\\', '_')
+        filename  = f"{safe_corr}_{item_idx}.jpg"
+        filepath  = os.path.join(FOTOS_DIR, filename)
+        img.save(filepath, 'JPEG', quality=82, optimize=True)
+        return filename
+    except Exception:
+        return None
 
 
 # ─── Auth Routes ─────────────────────────────────────────────────────────────
@@ -211,8 +257,7 @@ def login():
                 flash('Tu cuenta está desactivada. Contacta al administrador.', 'danger')
                 return render_template('login.html')
             login_user(user, remember=True)
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('index'))
+            return redirect(request.args.get('next') or url_for('index'))
         flash('Usuario o contraseña incorrectos.', 'danger')
     return render_template('login.html')
 
@@ -267,13 +312,25 @@ def guardar():
             (data.get('correlativo'),)
         ).fetchone()['id']
 
+        correlativo = data.get('correlativo', 'UNK')
+
         for i, (seccion, item) in enumerate(FLAT_ITEMS):
-            valor = data.get(f'valor_{i}', 'N/A')
+            valor      = data.get(f'valor_{i}', 'N/A')
             comentario = data.get(f'comentario_{i}', '')
             conn.execute('''
                 INSERT INTO items_checklist (inspeccion_id, seccion, item, valor, comentario)
                 VALUES (?,?,?,?,?)
             ''', (inspeccion_id, seccion, item, valor, comentario))
+
+            # Guardar foto si el valor es NO
+            if valor == 'NO':
+                foto_file = request.files.get(f'foto_{i}')
+                filename = _save_foto(foto_file, correlativo, i)
+                if filename:
+                    conn.execute(
+                        'INSERT INTO fotos_items (inspeccion_id, item_idx, filename) VALUES (?,?,?)',
+                        (inspeccion_id, i, filename)
+                    )
 
         conn.commit()
     finally:
@@ -297,18 +354,17 @@ def exito(inspeccion_id):
 @app.route('/historial')
 @login_required
 def historial():
-    recinto    = request.args.get('recinto', '').strip()
+    recinto     = request.args.get('recinto', '').strip()
     fecha_desde = request.args.get('fecha_desde', '').strip()
     fecha_hasta = request.args.get('fecha_hasta', '').strip()
 
-    # Base query con filtro por rol
     if current_user.is_admin():
         query  = "SELECT * FROM inspecciones WHERE 1=1"
         params = []
     elif current_user.rol == 'supervisor':
         query  = "SELECT * FROM inspecciones WHERE faena=?"
         params = [current_user.faena]
-    else:  # inspector
+    else:
         query  = "SELECT * FROM inspecciones WHERE usuario_id=?"
         params = [current_user.id]
 
@@ -333,6 +389,51 @@ def historial():
                            fecha_hasta=fecha_hasta)
 
 
+@app.route('/detalle/<int:inspeccion_id>')
+@login_required
+def detalle(inspeccion_id):
+    conn = get_db()
+    insp = conn.execute("SELECT * FROM inspecciones WHERE id=?", (inspeccion_id,)).fetchone()
+    if insp is None or not _puede_ver_inspeccion(insp):
+        conn.close()
+        flash('Inspección no encontrada o acceso denegado.', 'danger')
+        return redirect(url_for('historial'))
+
+    items = conn.execute(
+        "SELECT * FROM items_checklist WHERE inspeccion_id=? ORDER BY id",
+        (inspeccion_id,)
+    ).fetchall()
+    fotos_rows = conn.execute(
+        "SELECT item_idx, filename FROM fotos_items WHERE inspeccion_id=?",
+        (inspeccion_id,)
+    ).fetchall()
+    conn.close()
+
+    # Agrupar items por sección y mapear fotos por idx global
+    fotos = {row['item_idx']: row['filename'] for row in fotos_rows}
+    items_by_sec = {}
+    global_idx = 0
+    for seccion_name in SECCIONES.keys():
+        items_by_sec[seccion_name] = []
+        for it in items:
+            if it['seccion'] == seccion_name:
+                foto_url = None
+                if global_idx in fotos:
+                    foto_url = url_for('static', filename=f'fotos/{fotos[global_idx]}')
+                items_by_sec[seccion_name].append({
+                    'item':      it['item'],
+                    'valor':     it['valor'],
+                    'comentario':it['comentario'],
+                    'foto_url':  foto_url,
+                })
+                global_idx += 1
+
+    return render_template('detalle.html',
+                           insp=insp,
+                           items_by_sec=items_by_sec,
+                           secciones=SECCIONES)
+
+
 @app.route('/pdf/<int:inspeccion_id>')
 @login_required
 def descargar_pdf(inspeccion_id):
@@ -341,23 +442,22 @@ def descargar_pdf(inspeccion_id):
     if insp is None:
         conn.close()
         return "Inspección no encontrada", 404
-
-    # Verificar acceso
-    if not current_user.is_admin():
-        if current_user.rol == 'supervisor' and insp['faena'] != current_user.faena:
-            conn.close()
-            return "Acceso denegado", 403
-        if current_user.rol == 'inspector' and insp['usuario_id'] != current_user.id:
-            conn.close()
-            return "Acceso denegado", 403
+    if not _puede_ver_inspeccion(insp):
+        conn.close()
+        return "Acceso denegado", 403
 
     items = conn.execute(
         "SELECT * FROM items_checklist WHERE inspeccion_id=? ORDER BY id",
         (inspeccion_id,)
     ).fetchall()
+    fotos_rows = conn.execute(
+        "SELECT item_idx, filename FROM fotos_items WHERE inspeccion_id=?",
+        (inspeccion_id,)
+    ).fetchall()
     conn.close()
 
-    buf = generate_pdf(insp, items)
+    fotos = {row['item_idx']: row['filename'] for row in fotos_rows}
+    buf = generate_pdf(insp, items, fotos)
     filename = f'INCO-INI-VH-001_{insp["correlativo"]}.pdf'
     return send_file(buf, as_attachment=True, download_name=filename, mimetype='application/pdf')
 
@@ -418,7 +518,6 @@ def admin_usuario_toggle(uid):
 
 
 def _guardar_usuario(uid):
-    """Crea o actualiza un usuario desde el formulario."""
     f = request.form
     username        = f.get('username', '').strip()
     nombre_completo = f.get('nombre_completo', '').strip()
@@ -434,7 +533,7 @@ def _guardar_usuario(uid):
 
     conn = get_db()
     try:
-        if uid is None:  # Nuevo usuario
+        if uid is None:
             if not password:
                 flash('La contraseña es obligatoria para un usuario nuevo.', 'danger')
                 return redirect(request.url)
@@ -444,7 +543,7 @@ def _guardar_usuario(uid):
             ''', (username, nombre_completo, email,
                   generate_password_hash(password), rol, faena, activo))
             flash(f'Usuario "{username}" creado correctamente.', 'success')
-        else:  # Editar
+        else:
             if password:
                 conn.execute('''
                     UPDATE usuarios SET username=?, nombre_completo=?, email=?,
@@ -482,19 +581,17 @@ C_ROJO_BG    = colors.HexColor('#FFCDD2')
 C_GRIS_BG    = colors.HexColor('#E0E0E0')
 C_LINEA      = colors.HexColor('#BDBDBD')
 C_FILA_ALT   = colors.HexColor('#F5F5F5')
+C_FOTO_BG    = colors.HexColor('#FFF3E0')
 
 
 def pdf_logo(filename, fallback_text, max_w=4.0, max_h=2.2):
     path = os.path.join(STATIC_DIR, filename)
     if os.path.exists(path):
         try:
-            from PIL import Image as PILImage
             with PILImage.open(path) as pil_img:
                 pil_img.load()
                 nat_w, nat_h = pil_img.size
-            max_w_pt = max_w * cm
-            max_h_pt = max_h * cm
-            ratio    = min(max_w_pt / nat_w, max_h_pt / nat_h)
+            ratio = min(max_w * cm / nat_w, max_h * cm / nat_h)
             img = Image(path, width=nat_w * ratio, height=nat_h * ratio)
             img.hAlign = 'CENTER'
             return img
@@ -504,12 +601,31 @@ def pdf_logo(filename, fallback_text, max_w=4.0, max_h=2.2):
     d = Drawing(w, h)
     d.add(Rect(0, 0, w, h, fillColor=C_AZUL, strokeColor=None))
     d.add(RLString(8, h * 0.52, fallback_text,
-                   fontName='Helvetica-Bold', fontSize=15,
-                   fillColor=colors.white))
+                   fontName='Helvetica-Bold', fontSize=15, fillColor=colors.white))
     return d
 
 
-def generate_pdf(insp, items):
+def _pdf_foto(filename, max_w_cm=7.0, max_h_cm=5.0):
+    """Devuelve un Image de reportlab para una foto, o None si no existe/falla."""
+    path = os.path.join(FOTOS_DIR, filename)
+    if not os.path.exists(path):
+        return None
+    try:
+        with PILImage.open(path) as pil_img:
+            pil_img.load()
+            nat_w, nat_h = pil_img.size
+        ratio = min(max_w_cm * cm / nat_w, max_h_cm * cm / nat_h)
+        img = Image(path, width=nat_w * ratio, height=nat_h * ratio)
+        img.hAlign = 'LEFT'
+        return img
+    except Exception:
+        return None
+
+
+def generate_pdf(insp, items, fotos=None):
+    if fotos is None:
+        fotos = {}
+
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             rightMargin=1.5 * cm, leftMargin=1.5 * cm,
@@ -542,10 +658,12 @@ def generate_pdf(insp, items):
     s_obs_body   = style('ob',  fontSize=9,  fontName='Helvetica', leading=13)
     s_obs_label  = style('ol',  fontSize=9,  fontName='Helvetica-Bold',
                          textColor=colors.white)
+    s_foto_lbl   = style('fl',  fontSize=7,  fontName='Helvetica-Bold',
+                         textColor=colors.HexColor('#E65100'))
 
     story = []
 
-    # ── Cabecera: Logo INCOVALL | Título | Logo CMP ──────────────────────────
+    # ── Cabecera ────────────────────────────────────────────────────────────
     s_title_main = style('tm', fontSize=13, fontName='Helvetica-Bold',
                          textColor=colors.white, alignment=TA_CENTER)
     s_title_sub  = style('ts', fontSize=8.5, fontName='Helvetica',
@@ -616,10 +734,10 @@ def generate_pdf(insp, items):
     COL_CMT  = W - COL_ITEM - 3 * COL_CHK
 
     tbl_data = [[
-        Paragraph('<b>ÍTEM</b>', s_white_bold),
-        Paragraph('<b>SI</b>',   s_white_bold),
-        Paragraph('<b>NO</b>',   s_white_bold),
-        Paragraph('<b>N/A</b>',  s_white_bold),
+        Paragraph('<b>ÍTEM</b>',        s_white_bold),
+        Paragraph('<b>SI</b>',          s_white_bold),
+        Paragraph('<b>NO</b>',          s_white_bold),
+        Paragraph('<b>N/A</b>',         s_white_bold),
         Paragraph('<b>COMENTARIOS</b>', s_white_bold),
     ]]
     tbl_styles = [
@@ -634,7 +752,9 @@ def generate_pdf(insp, items):
         ('LEFTPADDING',   (0, 0), (-1, -1), 5),
     ]
 
-    row_idx = 1
+    row_idx    = 1
+    global_idx = 0
+
     for seccion_name in SECCIONES.keys():
         tbl_data.append([Paragraph(seccion_name, s_sec_header), '', '', '', ''])
         tbl_styles += [
@@ -649,22 +769,40 @@ def generate_pdf(insp, items):
             no  = Paragraph('✓', s_mark_no)    if valor == 'NO'  else Paragraph('', s_mark_empty)
             na  = Paragraph('✓', s_mark_na)    if valor == 'N/A' else Paragraph('', s_mark_empty)
 
+            # Celda de comentario: texto + foto embebida si valor == NO
+            comment_content = [Paragraph(it['comentario'] or '', s_comment)]
+            has_foto = False
+
+            if valor == 'NO' and global_idx in fotos:
+                foto_img = _pdf_foto(fotos[global_idx], max_w_cm=COL_CMT / cm - 0.3, max_h_cm=4.5)
+                if foto_img is not None:
+                    comment_content.append(Spacer(1, 3))
+                    comment_content.append(Paragraph('Evidencia:', s_foto_lbl))
+                    comment_content.append(Spacer(1, 2))
+                    comment_content.append(foto_img)
+                    has_foto = True
+
             tbl_data.append([
                 Paragraph(it['item'], s_item),
                 si, no, na,
-                Paragraph(it['comentario'] or '', s_comment),
+                comment_content,
             ])
 
-            if row_idx % 2 == 0:
+            if row_idx % 2 == 0 and not has_foto:
                 tbl_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), C_FILA_ALT))
             if valor == 'SI':
                 tbl_styles.append(('BACKGROUND', (1, row_idx), (1, row_idx), C_VERDE_BG))
             elif valor == 'NO':
                 tbl_styles.append(('BACKGROUND', (2, row_idx), (2, row_idx), C_ROJO_BG))
+                if has_foto:
+                    tbl_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), C_FOTO_BG))
             elif valor == 'N/A':
                 tbl_styles.append(('BACKGROUND', (3, row_idx), (3, row_idx), C_GRIS_BG))
-            tbl_styles.append(('ALIGN', (1, row_idx), (3, row_idx), 'CENTER'))
-            row_idx += 1
+
+            tbl_styles.append(('ALIGN',  (1, row_idx), (3, row_idx), 'CENTER'))
+            tbl_styles.append(('VALIGN', (0, row_idx), (-1, row_idx), 'TOP'))
+            row_idx    += 1
+            global_idx += 1
 
     checklist_t = Table(tbl_data, colWidths=[COL_ITEM, COL_CHK, COL_CHK, COL_CHK, COL_CMT])
     checklist_t.setStyle(TableStyle(tbl_styles))
@@ -714,7 +852,6 @@ def generate_pdf(insp, items):
     story.append(firma_t)
     story.append(Spacer(1, 0.3 * cm))
 
-    # ── Pie de página ────────────────────────────────────────────────────────
     story.append(Paragraph(
         f'Generado el {datetime.now().strftime("%d/%m/%Y %H:%M")} &nbsp;|&nbsp; '
         f'INCOVALL – Inspección Preventiva INI &nbsp;|&nbsp; INCO-INI-VH-001',

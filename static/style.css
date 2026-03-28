@@ -193,3 +193,177 @@ body {
   font-family: 'Consolas', monospace;
   letter-spacing: 0.5px;
 }
+
+/* ══ Zona de foto en el checklist ════════════════════════════════════════════ */
+.foto-upload-zone {
+  padding: 0.5rem 0.75rem 0.6rem;
+  border-top: 1px dashed #f48fb1;
+  background: #fff8f8;
+}
+
+.foto-upload-inner {
+  max-width: 480px;
+}
+
+.btn-foto-cam {
+  background: #c62828;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: center;
+}
+.btn-foto-cam:hover { background: #b71c1c; color: white; }
+
+.btn-foto-file {
+  background: white;
+  color: #555;
+  border: 1.5px solid #ccc;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: center;
+}
+.btn-foto-file:hover { border-color: #999; color: #333; }
+
+.foto-preview-box {
+  margin-top: 0.55rem;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 0.5rem 0.65rem;
+}
+
+.foto-preview-img {
+  height: 90px;
+  width: auto;
+  max-width: 130px;
+  object-fit: cover;
+  border-radius: 7px;
+  border: 1px solid #ddd;
+  flex-shrink: 0;
+}
+
+.foto-preview-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #333;
+  word-break: break-all;
+}
+.foto-preview-size { font-size: 0.75rem; color: #888; }
+
+@media (max-width: 575px) {
+  .foto-upload-zone { padding: 0.5rem; }
+  .foto-preview-img { height: 75px; }
+  .btn-foto-cam, .btn-foto-file { font-size: 0.95rem; padding: 0.55rem; }
+}
+
+/* ══ Página de detalle ═══════════════════════════════════════════════════════ */
+.detalle-field-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #888;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+.detalle-field-val {
+  font-size: 0.97rem;
+  font-weight: 600;
+  color: #222;
+}
+
+.detalle-item-row {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid #eee;
+}
+.detalle-row-si  { background: #f0fff4; }
+.detalle-row-no  { background: #fff5f5; border-left: 4px solid var(--rojo); }
+.detalle-row-na  { background: #fafafa; }
+
+.detalle-item-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.detalle-item-name {
+  flex: 1 1 140px;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+.detalle-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.detalle-comentario {
+  font-size: 0.82rem;
+  color: #555;
+}
+
+/* Zona de foto en el detalle */
+.detalle-foto-zona {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0;
+}
+.detalle-foto-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #c62828;
+  margin-bottom: 0.35rem;
+}
+.detalle-foto-link {
+  display: inline-block;
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+}
+.detalle-foto-img {
+  display: block;
+  max-height: 200px;
+  max-width: 100%;
+  width: auto;
+  border-radius: 10px;
+  transition: filter 0.2s;
+}
+.detalle-foto-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.2s;
+  border-radius: 10px;
+  gap: 5px;
+}
+.detalle-foto-link:hover .detalle-foto-overlay { opacity: 1; }
+.detalle-foto-link:hover .detalle-foto-img { filter: brightness(0.85); }
+
+.detalle-foto-sin {
+  color: #aaa;
+  font-size: 0.82rem;
+  padding: 0.2rem 0;
+}
+
+@media (max-width: 575px) {
+  .detalle-foto-img { max-height: 160px; }
+}

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Detalle {{ insp['correlativo'] }} – INCOVALL{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/historial">Historial</a></li>
+    <li class="breadcrumb-item active">{{ insp['correlativo'] }}</li>
+  </ol>
+</nav>
+
+<!-- ══ Encabezado de la inspección ════════════════════════════════════════ -->
+<div class="card shadow-sm mb-3">
+  <div class="card-header text-white fw-bold d-flex justify-content-between align-items-center"
+       style="background:#0d47a1;">
+    <span><i class="bi bi-clipboard2-check"></i> Inspección {{ insp['correlativo'] }}</span>
+    <span class="badge bg-warning text-dark fs-6">{{ insp['fecha'] }}</span>
+  </div>
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Recinto</div>
+        <div class="detalle-field-val">{{ insp['nombre_recinto'] }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Faena</div>
+        <div class="detalle-field-val">{{ insp['faena'] }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Valle</div>
+        <div class="detalle-field-val">{{ insp['valle'] }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Cliente</div>
+        <div class="detalle-field-val">{{ insp['cliente'] }}</div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="detalle-field-label">Inspector</div>
+        <div class="detalle-field-val">{{ insp['nombre_inspector'] }}</div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="detalle-field-label">Supervisor</div>
+        <div class="detalle-field-val">{{ insp['supervisor'] }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Checklist por sección ══════════════════════════════════════════════ -->
+{% for seccion_name, items in items_by_sec.items() %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header text-white fw-bold" style="background:#1565C0;">
+    {% if seccion_name == 'SISTEMA SANITARIO' %}<i class="bi bi-droplet-half"></i>
+    {% elif seccion_name == 'SISTEMA ELÉCTRICO' %}<i class="bi bi-lightning-charge"></i>
+    {% elif seccion_name == 'INFRAESTRUCTURA GENERAL' %}<i class="bi bi-building"></i>
+    {% elif seccion_name == 'SISTEMA DE ALCANTARILLADO' %}<i class="bi bi-pipe"></i>
+    {% else %}<i class="bi bi-check-circle"></i>{% endif %}
+    {{ seccion_name }}
+  </div>
+  <div class="card-body p-0">
+    {% for it in items %}
+    <div class="detalle-item-row
+      {% if it['valor'] == 'NO' %}detalle-row-no
+      {% elif it['valor'] == 'SI' %}detalle-row-si
+      {% else %}detalle-row-na{% endif %}
+      {% if loop.index % 2 == 0 and it['valor'] not in ('NO','SI') %}bg-fila{% endif %}">
+
+      <!-- Fila principal: nombre + badge + comentario -->
+      <div class="detalle-item-main">
+        <div class="detalle-item-name">{{ it['item'] }}</div>
+        <div class="detalle-item-meta">
+          {% if it['valor'] == 'SI' %}
+            <span class="badge bg-success fs-6 px-3">✓ SI</span>
+          {% elif it['valor'] == 'NO' %}
+            <span class="badge bg-danger fs-6 px-3">✗ NO</span>
+          {% else %}
+            <span class="badge bg-secondary fs-6 px-3">N/A</span>
+          {% endif %}
+          {% if it['comentario'] %}
+          <span class="detalle-comentario">
+            <i class="bi bi-chat-text text-muted"></i> {{ it['comentario'] }}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Foto de evidencia (solo si valor=NO y existe foto) -->
+      {% if it['foto_url'] %}
+      <div class="detalle-foto-zona">
+        <p class="detalle-foto-label">
+          <i class="bi bi-camera-fill text-danger"></i> Evidencia fotográfica
+        </p>
+        <a href="{{ it['foto_url'] }}" target="_blank" class="detalle-foto-link">
+          <img src="{{ it['foto_url'] }}"
+               alt="Evidencia {{ it['item'] }}"
+               class="detalle-foto-img"
+               loading="lazy">
+          <div class="detalle-foto-overlay">
+            <i class="bi bi-zoom-in"></i> Ver ampliada
+          </div>
+        </a>
+      </div>
+      {% elif it['valor'] == 'NO' %}
+      <div class="detalle-foto-zona detalle-foto-sin">
+        <i class="bi bi-camera text-muted"></i>
+        <span class="text-muted small ms-1">Sin foto adjunta</span>
+      </div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<!-- ══ Observaciones ══════════════════════════════════════════════════════ -->
+{% if insp['observaciones'] %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header text-white fw-bold" style="background:#0d47a1;">
+    <i class="bi bi-pencil-square"></i> Observaciones Generales
+  </div>
+  <div class="card-body">
+    <p class="mb-0" style="white-space:pre-wrap;">{{ insp['observaciones'] }}</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══ Acciones ════════════════════════════════════════════════════════════ -->
+<div class="d-flex gap-2 flex-wrap mb-5">
+  <a href="/pdf/{{ insp['id'] }}" class="btn btn-danger fw-semibold">
+    <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
+  </a>
+  <a href="/historial" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Volver al Historial
+  </a>
+</div>
+
+{% endblock %}
