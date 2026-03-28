@@ -52,6 +52,17 @@
         <i class="bi bi-clock-history"></i> <span class="d-none d-md-inline">Historial</span>
       </a>
 
+      <!-- Acciones Correctivas (todos los roles) -->
+      <a href="/acciones" class="btn btn-outline-light btn-sm position-relative {% if request.path.startswith('/acciones') %}active{% endif %}">
+        <i class="bi bi-tools"></i> <span class="d-none d-md-inline">Acciones</span>
+        {% if acciones_pendientes_badge > 0 %}
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              style="font-size:0.6rem; min-width:16px; padding:2px 4px;">
+          {{ acciones_pendientes_badge if acciones_pendientes_badge < 100 else '99+' }}
+        </span>
+        {% endif %}
+      </a>
+
       {% if current_user.is_supervisor() %}
       <a href="/dashboard" class="btn btn-outline-light btn-sm {% if request.path == '/dashboard' %}active{% endif %}">
         <i class="bi bi-bar-chart-line"></i> <span class="d-none d-md-inline">Dashboard</span>

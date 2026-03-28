@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Acciones Correctivas – INCOVALL{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0">
+    <i class="bi bi-tools text-warning me-2"></i>Acciones Correctivas
+  </h4>
+  <div class="d-flex gap-2 align-items-center">
+    {% set n_pend = acciones | selectattr('estado', 'ne', 'Completada') | list | length %}
+    {% if n_pend > 0 %}
+    <span class="badge bg-danger fs-6">{{ n_pend }} pendiente{{ 's' if n_pend != 1 }}</span>
+    {% endif %}
+    <span class="badge bg-secondary">{{ acciones | length }} total</span>
+  </div>
+</div>
+
+<!-- ══ Filtros ════════════════════════════════════════════════════════════ -->
+<div class="card shadow-sm mb-3" style="background:#fffef0; border-color:#ffe082;">
+  <div class="card-body py-2">
+    <form method="GET" action="/acciones" class="row g-2 align-items-end">
+      <div class="col-6 col-sm-4 col-md-2">
+        <label class="form-label fw-semibold small mb-1">Estado</label>
+        <select name="estado" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          {% for e in estados %}
+          <option value="{{ e }}" {{ 'selected' if estado_f == e }}>{{ e }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-sm-4 col-md-2">
+        <label class="form-label fw-semibold small mb-1">Prioridad</label>
+        <select name="prioridad" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for p in prioridades %}
+          <option value="{{ p }}" {{ 'selected' if prioridad_f == p }}>{{ p }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if current_user.is_admin() %}
+      <div class="col-6 col-sm-4 col-md-2">
+        <label class="form-label fw-semibond small mb-1">Faena</label>
+        <select name="faena" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for f in faenas %}
+          <option value="{{ f }}" {{ 'selected' if faena_f == f }}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      {% if current_user.is_supervisor() %}
+      <div class="col-6 col-sm-4 col-md-2">
+        <label class="form-label fw-semibold small mb-1">Responsable</label>
+        <select name="responsable" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          {% for u in usuarios %}
+          <option value="{{ u['id'] }}" {{ 'selected' if resp_f == u['id']|string }}>
+            {{ u['nombre_completo'].split()[0] }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-warning btn-sm fw-semibold">
+          <i class="bi bi-search"></i> Filtrar
+        </button>
+        <a href="/acciones" class="btn btn-outline-secondary btn-sm" title="Limpiar">
+          <i class="bi bi-x-circle"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══ Lista — escritorio ════════════════════════════════════════════════ -->
+{% if acciones %}
+<div class="d-none d-md-block">
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead style="background:#1a3a5c; color:white;">
+          <tr>
+            <th style="width:28px">#</th>
+            <th>Ítem / Recinto</th>
+            <th>Faena</th>
+            <th class="text-center">Prioridad</th>
+            <th class="text-center">Estado</th>
+            <th>Responsable</th>
+            <th class="text-center">Vence</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ac in acciones %}
+          {% set vencida = ac['fecha_limite'] and ac['fecha_limite'] < today and ac['estado'] != 'Completada' %}
+          <tr class="{{ 'table-danger' if vencida else '' }}">
+            <td class="text-muted">{{ loop.index }}</td>
+            <td>
+              <div class="fw-semibold">{{ ac['item'] }}</div>
+              <div class="text-muted small">
+                <i class="bi bi-building"></i> {{ ac['recinto'] }}
+              </div>
+            </td>
+            <td><span class="badge bg-secondary">{{ ac['faena'] or '—' }}</span></td>
+            <td class="text-center">
+              <span class="badge ac-prio-{{ ac['prioridad'] | lower }}">
+                {{ ac['prioridad'] }}
+              </span>
+            </td>
+            <td class="text-center">
+              <span class="badge ac-est-{{ ac['estado'] | lower | replace(' ','_') }}">
+                {{ ac['estado'] }}
+              </span>
+            </td>
+            <td>
+              {% if ac['responsable_nombre'] %}
+                <span class="text-truncate d-inline-block" style="max-width:110px;"
+                      title="{{ ac['responsable_nombre'] }}">
+                  {{ ac['responsable_nombre'] }}
+                </span>
+              {% else %}
+                <span class="text-muted fst-italic small">Sin asignar</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if ac['fecha_limite'] %}
+                <span class="{{ 'text-danger fw-bold' if vencida else '' }}">
+                  {{ ac['fecha_limite'] }}
+                  {% if vencida %}<i class="bi bi-exclamation-triangle-fill"></i>{% endif %}
+                </span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-center">
+              <a href="/acciones/{{ ac['id'] }}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Lista — móvil ═════════════════════════════════════════════════════ -->
+<div class="d-md-none">
+  {% for ac in acciones %}
+  {% set vencida = ac['fecha_limite'] and ac['fecha_limite'] < today and ac['estado'] != 'Completada' %}
+  <div class="card mb-2 shadow-sm ac-card-{{ ac['estado'] | lower | replace(' ','_') }}
+              {{ 'border-danger' if vencida else '' }}">
+    <div class="card-body py-2 px-3">
+      <div class="d-flex justify-content-between align-items-start mb-1">
+        <div class="fw-semibold">{{ ac['item'] }}</div>
+        <div class="d-flex gap-1">
+          <span class="badge ac-prio-{{ ac['prioridad'] | lower }}">{{ ac['prioridad'] }}</span>
+          <span class="badge ac-est-{{ ac['estado'] | lower | replace(' ','_') }}">{{ ac['estado'] }}</span>
+        </div>
+      </div>
+      <div class="small text-muted mb-1">
+        <i class="bi bi-building"></i> {{ ac['recinto'] }}
+        <span class="ms-2"><i class="bi bi-geo-alt"></i> {{ ac['faena'] or '—' }}</span>
+      </div>
+      {% if ac['responsable_nombre'] %}
+      <div class="small text-muted mb-1">
+        <i class="bi bi-person"></i> {{ ac['responsable_nombre'] }}
+      </div>
+      {% endif %}
+      <div class="d-flex justify-content-between align-items-center mt-2">
+        <div class="small {{ 'text-danger fw-bold' if vencida else 'text-muted' }}">
+          {% if ac['fecha_limite'] %}
+          <i class="bi bi-calendar{{ '-x' if vencida else '' }}"></i>
+          Vence: {{ ac['fecha_limite'] }}
+          {% endif %}
+        </div>
+        <a href="/acciones/{{ ac['id'] }}" class="btn btn-sm btn-primary">
+          Ver <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-check2-circle" style="font-size:3.5rem; color:#2e7d32; opacity:.5;"></i>
+  <p class="mt-2 fs-5">
+    {% if estado_f or prioridad_f or faena_f or resp_f %}
+      No hay acciones con esos filtros.
+    {% else %}
+      Sin acciones correctivas registradas.
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+
+{% endblock %}

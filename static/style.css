@@ -440,3 +440,20 @@ body {
 @media (max-width: 575px) {
   .detalle-foto-img { max-height: 160px; }
 }
+
+/* ══ Acciones Correctivas — badges ══════════════════════════════════════════ */
+.ac-prio-alta  { background: #c62828; color: white; }
+.ac-prio-media { background: #E65100; color: white; }
+.ac-prio-baja  { background: #2e7d32; color: white; }
+
+.ac-est-pendiente  { background: #1565C0; color: white; }
+.ac-est-en_proceso { background: #E65100; color: white; }
+.ac-est-completada { background: #2e7d32; color: white; }
+
+/* ── KPI morado (acciones pendientes) ───────────────────────────────────── */
+.kpi-morado { background: linear-gradient(135deg, #4a148c, #7b1fa2); }
+
+/* ── Card con estado de acción ───────────────────────────────────────────── */
+.ac-card-pendiente  { border-left: 4px solid #1565C0; }
+.ac-card-en_proceso { border-left: 4px solid #E65100; }
+.ac-card-completada { border-left: 4px solid #2e7d32; opacity: 0.82; }

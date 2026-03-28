@@ -187,6 +187,41 @@ def init_db():
         )
     ''')
 
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS acciones_correctivas (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            inspeccion_id   INTEGER NOT NULL,
+            item_idx        INTEGER NOT NULL,
+            recinto         TEXT NOT NULL,
+            faena           TEXT,
+            item            TEXT NOT NULL,
+            descripcion     TEXT,
+            foto_filename   TEXT,
+            responsable_id  INTEGER,
+            fecha_limite    TEXT,
+            prioridad       TEXT NOT NULL DEFAULT 'Media',
+            estado          TEXT NOT NULL DEFAULT 'Pendiente',
+            observaciones   TEXT,
+            fecha_cierre    TEXT,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (inspeccion_id) REFERENCES inspecciones(id),
+            FOREIGN KEY (responsable_id) REFERENCES usuarios(id)
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS seguimiento_acciones (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            accion_id   INTEGER NOT NULL,
+            usuario_id  INTEGER NOT NULL,
+            observacion TEXT NOT NULL,
+            estado_nuevo TEXT,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (accion_id)  REFERENCES acciones_correctivas(id),
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        )
+    ''')
+
     # Admin inicial
     if not c.execute("SELECT id FROM usuarios WHERE username='admin'").fetchone():
         c.execute('''
@@ -324,6 +359,29 @@ def _dashboard_data(faena_filter, fecha_desde, fecha_hasta):
         f"SELECT faena, COUNT(*) AS cnt FROM inspecciones i {wh} "
         f"GROUP BY faena ORDER BY cnt DESC", wp).fetchall()
 
+    # ── 7. Acciones correctivas ───────────────────────────────────────────────
+    ac_wh, ac_wp = [], []
+    if faena_filter: ac_wh.append("faena=?"); ac_wp.append(faena_filter)
+
+    ac_base = ("WHERE " + " AND ".join(ac_wh)) if ac_wh else ""
+    acciones_pendientes = conn.execute(
+        f"SELECT COUNT(*) FROM acciones_correctivas {ac_base} "
+        f"{'AND' if ac_base else 'WHERE'} estado != 'Completada'",
+        ac_wp
+    ).fetchone()[0]
+
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    ac_venc_wh = list(ac_wh) + ["estado != 'Completada'", "fecha_limite < ?"]
+    ac_venc_wp = list(ac_wp) + [today_str]
+    acciones_vencidas = conn.execute(
+        f"SELECT ac.*, u.nombre_completo AS responsable_nombre "
+        f"FROM acciones_correctivas ac "
+        f"LEFT JOIN usuarios u ON ac.responsable_id = u.id "
+        f"WHERE {' AND '.join(ac_venc_wh)} "
+        f"ORDER BY ac.fecha_limite ASC LIMIT 10",
+        ac_venc_wp
+    ).fetchall()
+
     conn.close()
     return {
         'total_inspecciones':  total_inspecciones,
@@ -336,6 +394,8 @@ def _dashboard_data(faena_filter, fecha_desde, fecha_hasta):
         'semanas_vals':        semanas_vals,
         'recintos_criticos':   recintos_criticos,
         'por_faena':           [(r['faena'], r['cnt']) for r in por_faena],
+        'acciones_pendientes': acciones_pendientes,
+        'acciones_vencidas':   acciones_vencidas,
     }
 
 
@@ -422,15 +482,36 @@ def guardar():
                 VALUES (?,?,?,?,?)
             ''', (inspeccion_id, seccion, item, valor, comentario))
 
-            # Guardar foto si el valor es NO
+            # Guardar foto y crear acción correctiva si el valor es NO
             if valor == 'NO':
                 foto_file = request.files.get(f'foto_{i}')
-                filename = _save_foto(foto_file, correlativo, i)
-                if filename:
+                foto_filename = _save_foto(foto_file, correlativo, i)
+                if foto_filename:
                     conn.execute(
                         'INSERT INTO fotos_items (inspeccion_id, item_idx, filename) VALUES (?,?,?)',
-                        (inspeccion_id, i, filename)
+                        (inspeccion_id, i, foto_filename)
                     )
+                # Acción correctiva automática
+                from datetime import timedelta
+                fecha_insp  = data.get('fecha') or datetime.now().strftime('%Y-%m-%d')
+                fecha_limite = (datetime.strptime(fecha_insp, '%Y-%m-%d')
+                                + timedelta(days=7)).strftime('%Y-%m-%d')
+                conn.execute('''
+                    INSERT INTO acciones_correctivas
+                        (inspeccion_id, item_idx, recinto, faena, item,
+                         descripcion, foto_filename, fecha_limite, prioridad, estado)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)
+                ''', (
+                    inspeccion_id, i,
+                    data.get('nombre_recinto', ''),
+                    data.get('faena', ''),
+                    item,
+                    comentario or f'Ítem "{item}" marcado como NO en inspección {correlativo}',
+                    foto_filename,
+                    fecha_limite,
+                    'Alta',
+                    'Pendiente',
+                ))
 
         conn.commit()
     finally:
@@ -591,6 +672,187 @@ def descargar_pdf(inspeccion_id):
     buf = generate_pdf(insp, items, fotos)
     filename = f'INCO-INI-VH-001_{insp["correlativo"]}.pdf'
     return send_file(buf, as_attachment=True, download_name=filename, mimetype='application/pdf')
+
+
+# ─── Acciones Correctivas ────────────────────────────────────────────────────
+
+ESTADOS_AC   = ['Pendiente', 'En proceso', 'Completada']
+PRIORIDADES  = ['Alta', 'Media', 'Baja']
+
+
+def _acciones_pendientes_usuario():
+    """Cuenta acciones pendientes/en-proceso asignadas al usuario actual."""
+    if not current_user.is_authenticated:
+        return 0
+    conn = get_db()
+    n = conn.execute(
+        "SELECT COUNT(*) FROM acciones_correctivas "
+        "WHERE responsable_id=? AND estado != 'Completada'",
+        (current_user.id,)
+    ).fetchone()[0]
+    conn.close()
+    return n
+
+
+# Inyectar contador en todos los templates
+@app.context_processor
+def inject_acciones_badge():
+    count = _acciones_pendientes_usuario() if current_user.is_authenticated else 0
+    return {'acciones_pendientes_badge': count}
+
+
+@app.route('/acciones')
+@login_required
+def acciones():
+    estado_f    = request.args.get('estado',   '').strip()
+    prioridad_f = request.args.get('prioridad','').strip()
+    faena_f     = request.args.get('faena',    '').strip()
+    resp_f      = request.args.get('responsable', '').strip()
+
+    q  = '''SELECT ac.*, u.nombre_completo AS responsable_nombre
+            FROM acciones_correctivas ac
+            LEFT JOIN usuarios u ON ac.responsable_id = u.id
+            WHERE 1=1'''
+    p  = []
+
+    # Filtro por rol
+    if current_user.rol == 'inspector':
+        q += ' AND ac.inspeccion_id IN (SELECT id FROM inspecciones WHERE usuario_id=?)'
+        p.append(current_user.id)
+    elif current_user.rol == 'supervisor':
+        q += ' AND ac.faena=?'
+        p.append(current_user.faena)
+
+    if estado_f:
+        q += ' AND ac.estado=?'; p.append(estado_f)
+    if prioridad_f:
+        q += ' AND ac.prioridad=?'; p.append(prioridad_f)
+    if faena_f:
+        q += ' AND ac.faena=?'; p.append(faena_f)
+    if resp_f:
+        q += ' AND ac.responsable_id=?'; p.append(resp_f)
+
+    q += ' ORDER BY CASE ac.estado WHEN "Pendiente" THEN 1 WHEN "En proceso" THEN 2 ELSE 3 END,'
+    q += ' CASE ac.prioridad WHEN "Alta" THEN 1 WHEN "Media" THEN 2 ELSE 3 END,'
+    q += ' ac.fecha_limite ASC'
+
+    conn = get_db()
+    acciones_list = conn.execute(q, p).fetchall()
+    usuarios_list = conn.execute(
+        "SELECT id, nombre_completo, rol FROM usuarios WHERE activo=1 ORDER BY nombre_completo"
+    ).fetchall()
+    conn.close()
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    return render_template('acciones.html',
+                           acciones=acciones_list,
+                           usuarios=usuarios_list,
+                           estados=ESTADOS_AC,
+                           prioridades=PRIORIDADES,
+                           faenas=FAENAS,
+                           estado_f=estado_f, prioridad_f=prioridad_f,
+                           faena_f=faena_f, resp_f=resp_f,
+                           today=today)
+
+
+@app.route('/acciones/<int:accion_id>')
+@login_required
+def accion_detalle(accion_id):
+    conn = get_db()
+    ac = conn.execute(
+        '''SELECT ac.*, u.nombre_completo AS responsable_nombre,
+                  i.correlativo, i.nombre_recinto
+           FROM acciones_correctivas ac
+           LEFT JOIN usuarios u ON ac.responsable_id = u.id
+           LEFT JOIN inspecciones i ON ac.inspeccion_id = i.id
+           WHERE ac.id=?''', (accion_id,)
+    ).fetchone()
+    if ac is None:
+        conn.close()
+        flash('Acción no encontrada.', 'danger')
+        return redirect(url_for('acciones'))
+
+    seguimientos = conn.execute(
+        '''SELECT s.*, u.nombre_completo AS autor
+           FROM seguimiento_acciones s
+           JOIN usuarios u ON s.usuario_id = u.id
+           WHERE s.accion_id=? ORDER BY s.created_at ASC''',
+        (accion_id,)
+    ).fetchall()
+    usuarios_list = conn.execute(
+        "SELECT id, nombre_completo FROM usuarios WHERE activo=1 ORDER BY nombre_completo"
+    ).fetchall()
+    conn.close()
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    return render_template('accion_detalle.html',
+                           ac=ac,
+                           seguimientos=seguimientos,
+                           usuarios=usuarios_list,
+                           estados=ESTADOS_AC,
+                           prioridades=PRIORIDADES,
+                           today=today)
+
+
+@app.route('/acciones/<int:accion_id>/actualizar', methods=['POST'])
+@login_required
+def accion_actualizar(accion_id):
+    conn = get_db()
+    ac = conn.execute('SELECT * FROM acciones_correctivas WHERE id=?', (accion_id,)).fetchone()
+    if ac is None:
+        conn.close()
+        flash('Acción no encontrada.', 'danger')
+        return redirect(url_for('acciones'))
+
+    f             = request.form
+    nuevo_estado  = f.get('estado',         ac['estado'])
+    nueva_prio    = f.get('prioridad',       ac['prioridad'])
+    nuevo_resp    = f.get('responsable_id',  '') or None
+    nueva_fechal  = f.get('fecha_limite',    ac['fecha_limite'] or '')
+    observacion   = f.get('observacion',     '').strip()
+
+    fecha_cierre = ac['fecha_cierre']
+    if nuevo_estado == 'Completada' and ac['estado'] != 'Completada':
+        fecha_cierre = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    elif nuevo_estado != 'Completada':
+        fecha_cierre = None
+
+    conn.execute('''
+        UPDATE acciones_correctivas
+        SET estado=?, prioridad=?, responsable_id=?, fecha_limite=?,
+            fecha_cierre=?
+        WHERE id=?
+    ''', (nuevo_estado, nueva_prio, nuevo_resp, nueva_fechal or None,
+          fecha_cierre, accion_id))
+
+    if observacion:
+        conn.execute('''
+            INSERT INTO seguimiento_acciones (accion_id, usuario_id, observacion, estado_nuevo)
+            VALUES (?,?,?,?)
+        ''', (accion_id, current_user.id, observacion, nuevo_estado))
+
+    conn.commit()
+    conn.close()
+    flash('Acción actualizada correctamente.', 'success')
+    return redirect(url_for('accion_detalle', accion_id=accion_id))
+
+
+@app.route('/acciones/<int:accion_id>/asignar', methods=['POST'])
+@login_required
+def accion_asignar(accion_id):
+    """Asignación desde detalle: responsable, prioridad y fecha límite."""
+    responsable_id = request.form.get('responsable_id') or None
+    prioridad      = request.form.get('prioridad', 'Alta')
+    fecha_limite   = request.form.get('fecha_limite') or None
+    conn = get_db()
+    conn.execute(
+        'UPDATE acciones_correctivas SET responsable_id=?, prioridad=?, fecha_limite=? WHERE id=?',
+        (responsable_id, prioridad, fecha_limite, accion_id)
+    )
+    conn.commit()
+    conn.close()
+    flash('Asignación actualizada.', 'success')
+    return redirect(url_for('accion_detalle', accion_id=accion_id))
 
 
 # ─── Admin: Gestión de Usuarios ──────────────────────────────────────────────

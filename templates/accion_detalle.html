@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Acción #{{ ac['id'] }} – INCOVALL{% endblock %}
+
+{% block content %}
+
+<!-- ══ Encabezado ════════════════════════════════════════════════════════════ -->
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0">
+    <i class="bi bi-tools text-warning me-2"></i>Acción Correctiva
+    <span class="text-muted fw-normal fs-5">#{{ ac['id'] }}</span>
+  </h4>
+  <a href="/acciones" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+</div>
+
+<!-- ══ Ficha de la acción ═════════════════════════════════════════════════════ -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header" style="background:#1a3a5c; color:white;">
+    <i class="bi bi-info-circle me-2"></i>Detalle
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-12 col-md-6">
+        <div class="detalle-field-label">Ítem</div>
+        <div class="detalle-field-val">{{ ac['item'] }}</div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="detalle-field-label">Recinto</div>
+        <div class="detalle-field-val">
+          <i class="bi bi-building text-secondary me-1"></i>{{ ac['recinto'] }}
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Faena</div>
+        <div class="detalle-field-val">
+          <span class="badge bg-secondary">{{ ac['faena'] or '—' }}</span>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Prioridad</div>
+        <div class="detalle-field-val">
+          <span class="badge ac-prio-{{ ac['prioridad'] | lower }}">{{ ac['prioridad'] }}</span>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Estado</div>
+        <div class="detalle-field-val">
+          <span class="badge ac-est-{{ ac['estado'] | lower | replace(' ','_') }}">{{ ac['estado'] }}</span>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Responsable</div>
+        <div class="detalle-field-val">
+          {% if ac['responsable_nombre'] %}
+            <i class="bi bi-person-fill text-secondary me-1"></i>{{ ac['responsable_nombre'] }}
+          {% else %}
+            <span class="text-muted fst-italic">Sin asignar</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Creada</div>
+        <div class="detalle-field-val small">{{ ac['fecha_creacion'] }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Fecha límite</div>
+        {% set vencida = ac['fecha_limite'] and ac['fecha_limite'] < today and ac['estado'] != 'Completada' %}
+        <div class="detalle-field-val small {{ 'text-danger' if vencida else '' }}">
+          {% if ac['fecha_limite'] %}
+            {{ ac['fecha_limite'] }}
+            {% if vencida %}<i class="bi bi-exclamation-triangle-fill ms-1"></i>{% endif %}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+      {% if ac['fecha_cierre'] %}
+      <div class="col-6 col-md-3">
+        <div class="detalle-field-label">Fecha cierre</div>
+        <div class="detalle-field-val small text-success">
+          <i class="bi bi-check-circle-fill me-1"></i>{{ ac['fecha_cierre'] }}
+        </div>
+      </div>
+      {% endif %}
+      <div class="col-12">
+        <div class="detalle-field-label">Inspección origen</div>
+        <div class="detalle-field-val small">
+          <a href="/detalle/{{ ac['inspeccion_id'] }}" class="text-decoration-none">
+            <i class="bi bi-clipboard2 me-1"></i>Ver inspección #{{ ac['inspeccion_id'] }}
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Panel de actualización (responsable o supervisor/admin) ════════════════ -->
+{% set puede_actualizar = (ac['responsable_id'] == current_user.id or current_user.is_supervisor()) and ac['estado'] != 'Completada' %}
+{% set puede_asignar = current_user.is_supervisor() %}
+
+{% if puede_actualizar or puede_asignar %}
+<div class="row g-3 mb-4">
+
+  <!-- Cambiar estado + observación -->
+  {% if puede_actualizar %}
+  <div class="col-12 col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header" style="background:#1a3a5c; color:white;">
+        <i class="bi bi-pencil-square me-2"></i>Registrar avance
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/acciones/{{ ac['id'] }}/actualizar">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Nuevo estado</label>
+            <select name="estado" class="form-select form-select-sm" required>
+              {% for e in estados %}
+              <option value="{{ e }}" {{ 'selected' if ac['estado'] == e }}>{{ e }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Observación <span class="text-muted fw-normal">(opcional)</span></label>
+            <textarea name="observacion" class="form-control form-control-sm" rows="3"
+                      placeholder="Describe el avance o acción tomada..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-warning btn-sm fw-semibold">
+            <i class="bi bi-check-lg me-1"></i>Guardar avance
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Asignar responsable (supervisor/admin) -->
+  {% if puede_asignar %}
+  <div class="col-12 col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-header" style="background:#1a3a5c; color:white;">
+        <i class="bi bi-person-check me-2"></i>Asignar responsable
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/acciones/{{ ac['id'] }}/asignar">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Responsable</label>
+            <select name="responsable_id" class="form-select form-select-sm" required>
+              <option value="">— Sin asignar —</option>
+              {% for u in usuarios %}
+              <option value="{{ u['id'] }}" {{ 'selected' if ac['responsable_id'] == u['id'] }}>
+                {{ u['nombre_completo'] }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Prioridad</label>
+            <select name="prioridad" class="form-select form-select-sm">
+              {% for p in prioridades %}
+              <option value="{{ p }}" {{ 'selected' if ac['prioridad'] == p }}>{{ p }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Fecha límite</label>
+            <input type="date" name="fecha_limite" class="form-control form-control-sm"
+                   value="{{ ac['fecha_limite'] or '' }}">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+            <i class="bi bi-person-check me-1"></i>Actualizar asignación
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
+<!-- ══ Historial de seguimiento ═══════════════════════════════════════════════ -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header" style="background:#1a3a5c; color:white;">
+    <i class="bi bi-clock-history me-2"></i>Historial de seguimiento
+  </div>
+  {% if seguimientos %}
+  <ul class="list-group list-group-flush">
+    {% for s in seguimientos %}
+    <li class="list-group-item">
+      <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+        <div>
+          <span class="badge ac-est-{{ s['estado_nuevo'] | lower | replace(' ','_') }} me-2">
+            {{ s['estado_nuevo'] }}
+          </span>
+          {% if s['observacion'] %}
+          <span class="text-dark small">{{ s['observacion'] }}</span>
+          {% else %}
+          <span class="text-muted fst-italic small">Sin observación</span>
+          {% endif %}
+        </div>
+        <div class="text-end flex-shrink-0">
+          <div class="small text-muted">
+            <i class="bi bi-person me-1"></i>{{ s['autor'] or '—' }}
+          </div>
+          <div class="small text-muted">
+            <i class="bi bi-calendar2 me-1"></i>{{ s['created_at'] }}
+          </div>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="card-body text-center text-muted py-4">
+    <i class="bi bi-clock fs-2 opacity-25"></i>
+    <p class="mt-2 mb-0 small">Sin registros de seguimiento aún.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -53,33 +53,42 @@
 
 <!-- ══ Tarjetas KPI ════════════════════════════════════════════════════════ -->
 <div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-lg">
     <div class="kpi-card kpi-azul">
       <div class="kpi-icon"><i class="bi bi-clipboard2-check-fill"></i></div>
       <div class="kpi-num">{{ data.total_inspecciones }}</div>
       <div class="kpi-label">Inspecciones</div>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-lg">
     <div class="kpi-card kpi-rojo">
       <div class="kpi-icon"><i class="bi bi-x-circle-fill"></i></div>
       <div class="kpi-num">{{ data.total_no }}</div>
       <div class="kpi-label">Ítems en NO</div>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-lg">
     <div class="kpi-card kpi-verde">
       <div class="kpi-icon"><i class="bi bi-building-fill"></i></div>
       <div class="kpi-num">{{ data.recintos_count }}</div>
       <div class="kpi-label">Recintos</div>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-lg">
     <div class="kpi-card kpi-naranja">
       <div class="kpi-icon"><i class="bi bi-people-fill"></i></div>
       <div class="kpi-num">{{ data.inspectores_activos }}</div>
       <div class="kpi-label">Inspectores</div>
     </div>
+  </div>
+  <div class="col-6 col-lg">
+    <a href="/acciones?estado=Pendiente" class="text-decoration-none">
+      <div class="kpi-card kpi-morado">
+        <div class="kpi-icon"><i class="bi bi-tools"></i></div>
+        <div class="kpi-num">{{ data.acciones_pendientes }}</div>
+        <div class="kpi-label">Acciones Pend.</div>
+      </div>
+    </a>
   </div>
 </div>
 
@@ -236,6 +245,54 @@
   {% endif %}
 
 </div>
+
+<!-- ══ Acciones vencidas ═══════════════════════════════════════════════════ -->
+{% if data.acciones_vencidas %}
+<div class="card shadow-sm mb-4 border-danger">
+  <div class="card-header" style="background:#7f0000; color:white;">
+    <i class="bi bi-exclamation-octagon-fill me-2 text-warning"></i>Acciones vencidas
+    <span class="badge bg-warning text-dark ms-2">{{ data.acciones_vencidas | length }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle small">
+      <thead style="background:#1a3a5c; color:white;">
+        <tr>
+          <th>Ítem / Recinto</th>
+          <th>Faena</th>
+          <th class="text-center">Prioridad</th>
+          <th>Responsable</th>
+          <th class="text-center">Venció</th>
+          <th class="text-center">Ver</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for av in data.acciones_vencidas %}
+        <tr class="table-danger">
+          <td>
+            <div class="fw-semibold">{{ av['item'] }}</div>
+            <div class="text-muted small"><i class="bi bi-building"></i> {{ av['recinto'] }}</div>
+          </td>
+          <td><span class="badge bg-secondary">{{ av['faena'] or '—' }}</span></td>
+          <td class="text-center">
+            <span class="badge ac-prio-{{ av['prioridad'] | lower }}">{{ av['prioridad'] }}</span>
+          </td>
+          <td>{{ av['responsable_nombre'] or '—' }}</td>
+          <td class="text-center text-danger fw-bold">
+            {{ av['fecha_limite'] }}
+            <i class="bi bi-exclamation-triangle-fill ms-1"></i>
+          </td>
+          <td class="text-center">
+            <a href="/acciones/{{ av['id'] }}" class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}
 
