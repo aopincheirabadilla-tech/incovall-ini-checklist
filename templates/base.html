@@ -67,6 +67,9 @@
       <a href="/dashboard" class="btn btn-outline-light btn-sm {% if request.path == '/dashboard' %}active{% endif %}">
         <i class="bi bi-bar-chart-line"></i> <span class="d-none d-md-inline">Dashboard</span>
       </a>
+      <a href="/requerimientos" class="btn btn-outline-light btn-sm {% if request.path.startswith('/requerimientos') %}active{% endif %}">
+        <i class="bi bi-cart3"></i> <span class="d-none d-md-inline">Requerimientos</span>
+      </a>
       {% endif %}
 
       {% if current_user.is_admin() %}

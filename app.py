@@ -222,6 +222,19 @@ def init_db():
         )
     ''')
 
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS requerimientos (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_nombre         TEXT NOT NULL,
+            cantidad            INTEGER NOT NULL DEFAULT 1,
+            faena               TEXT,
+            recinto             TEXT,
+            fecha_ultimo_reporte TEXT,
+            estado              TEXT NOT NULL DEFAULT 'Pendiente',
+            created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Admin inicial
     if not c.execute("SELECT id FROM usuarios WHERE username='admin'").fetchone():
         c.execute('''
@@ -512,6 +525,30 @@ def guardar():
                     'Alta',
                     'Pendiente',
                 ))
+
+                # Requerimiento: incrementar si existe, crear si no
+                fecha_insp_str = data.get('fecha') or datetime.now().strftime('%Y-%m-%d')
+                req_faena   = data.get('faena', '')
+                req_recinto = data.get('nombre_recinto', '')
+                existing = conn.execute(
+                    '''SELECT id FROM requerimientos
+                       WHERE item_nombre=? AND faena=? AND recinto=? AND estado='Pendiente' ''',
+                    (item, req_faena, req_recinto)
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        '''UPDATE requerimientos
+                           SET cantidad=cantidad+1, fecha_ultimo_reporte=?
+                           WHERE id=?''',
+                        (fecha_insp_str, existing['id'])
+                    )
+                else:
+                    conn.execute(
+                        '''INSERT INTO requerimientos
+                               (item_nombre, cantidad, faena, recinto, fecha_ultimo_reporte, estado)
+                           VALUES (?,1,?,?,?,'Pendiente')''',
+                        (item, req_faena, req_recinto, fecha_insp_str)
+                    )
 
         conn.commit()
     finally:
@@ -853,6 +890,74 @@ def accion_asignar(accion_id):
     conn.close()
     flash('Asignación actualizada.', 'success')
     return redirect(url_for('accion_detalle', accion_id=accion_id))
+
+
+# ─── Módulo 5: Requerimientos de Materiales ──────────────────────────────────
+
+@app.route('/requerimientos')
+@login_required
+def requerimientos():
+    if not current_user.is_supervisor():
+        flash('Acceso restringido a Supervisores y Administradores.', 'danger')
+        return redirect(url_for('index'))
+
+    faena_f  = request.args.get('faena',  '').strip()
+    estado_f = request.args.get('estado', '').strip()
+
+    q = '''SELECT * FROM requerimientos WHERE 1=1'''
+    p = []
+    if faena_f:
+        q += ' AND faena=?'
+        p.append(faena_f)
+    if current_user.rol == 'supervisor':
+        q += ' AND faena=?'
+        p.append(current_user.faena)
+    if estado_f:
+        q += ' AND estado=?'
+        p.append(estado_f)
+    q += ' ORDER BY cantidad DESC, fecha_ultimo_reporte DESC'
+
+    conn = get_db()
+    reqs = conn.execute(q, p).fetchall()
+
+    # KPIs
+    kpi_q  = 'SELECT * FROM requerimientos WHERE estado=\'Pendiente\''
+    kpi_p  = []
+    if current_user.rol == 'supervisor':
+        kpi_q += ' AND faena=?'
+        kpi_p.append(current_user.faena)
+    pendientes_list = conn.execute(kpi_q + ' ORDER BY cantidad DESC', kpi_p).fetchall()
+    total_pendientes = len(pendientes_list)
+    mas_recurrente   = pendientes_list[0]['item_nombre'] if pendientes_list else '—'
+    max_cantidad     = pendientes_list[0]['cantidad']    if pendientes_list else 0
+
+    faenas_list = [r[0] for r in conn.execute(
+        'SELECT DISTINCT faena FROM requerimientos WHERE faena IS NOT NULL ORDER BY faena'
+    ).fetchall()]
+    conn.close()
+
+    return render_template('requerimientos.html',
+                           reqs=reqs,
+                           faenas=faenas_list,
+                           faena_f=faena_f,
+                           estado_f=estado_f,
+                           total_pendientes=total_pendientes,
+                           mas_recurrente=mas_recurrente,
+                           max_cantidad=max_cantidad)
+
+
+@app.route('/requerimientos/<int:req_id>/gestionar', methods=['POST'])
+@login_required
+def req_gestionar(req_id):
+    if not current_user.is_supervisor():
+        flash('Acceso restringido.', 'danger')
+        return redirect(url_for('index'))
+    conn = get_db()
+    conn.execute("UPDATE requerimientos SET estado='Gestionado' WHERE id=?", (req_id,))
+    conn.commit()
+    conn.close()
+    flash('Requerimiento marcado como Gestionado.', 'success')
+    return redirect(request.referrer or url_for('requerimientos'))
 
 
 # ─── Admin: Gestión de Usuarios ──────────────────────────────────────────────

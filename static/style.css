@@ -457,3 +457,27 @@ body {
 .ac-card-pendiente  { border-left: 4px solid #1565C0; }
 .ac-card-en_proceso { border-left: 4px solid #E65100; }
 .ac-card-completada { border-left: 4px solid #2e7d32; opacity: 0.82; }
+
+/* ══ Requerimientos de Materiales ═══════════════════════════════════════════ */
+.req-row-critico   { background: #fff3f3 !important; border-left: 4px solid #c62828; }
+.req-row-medio     { background: #fffde7 !important; border-left: 4px solid #f9a825; }
+.req-row-gestionado{ background: #f1f8f1 !important; opacity: 0.75; }
+.req-card-gestionado { opacity: 0.75; }
+
+.req-est-pendiente  { background: #1565C0; color: white; }
+.req-est-gestionado { background: #2e7d32; color: white; }
+
+.req-cant-badge { min-width: 28px; }
+
+/* Leyenda dots */
+.req-dot {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.req-critico   { background: #c62828; }
+.req-medio     { background: #f9a825; }
+.req-normal    { background: #1565C0; }
+.req-gestionado{ background: #2e7d32; }

@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Requerimientos – INCOVALL{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0">
+    <i class="bi bi-cart3 text-primary me-2"></i>Requerimientos de Materiales
+  </h4>
+  <span class="badge bg-secondary fs-6">{{ reqs | length }} resultado{{ 's' if reqs | length != 1 }}</span>
+</div>
+
+<!-- ══ KPIs ═══════════════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-4">
+    <div class="kpi-card kpi-rojo">
+      <div class="kpi-icon"><i class="bi bi-exclamation-circle-fill"></i></div>
+      <div class="kpi-num">{{ total_pendientes }}</div>
+      <div class="kpi-label">Ítems Pendientes</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-card kpi-naranja">
+      <div class="kpi-icon"><i class="bi bi-arrow-repeat"></i></div>
+      <div class="kpi-num">{{ max_cantidad }}</div>
+      <div class="kpi-label">Máx. Recurrencia</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="kpi-card kpi-azul" style="min-height:unset;">
+      <div class="kpi-icon"><i class="bi bi-star-fill"></i></div>
+      <div class="kpi-num" style="font-size:1rem; letter-spacing:0; font-weight:700; line-height:1.3;">
+        {{ mas_recurrente }}
+      </div>
+      <div class="kpi-label">Ítem más recurrente</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Leyenda de colores ══════════════════════════════════════════════════════ -->
+<div class="d-flex gap-3 mb-3 flex-wrap align-items-center small">
+  <span class="fw-semibold text-muted">Nivel de criticidad:</span>
+  <span><span class="req-dot req-critico"></span> Crítico (≥ 3)</span>
+  <span><span class="req-dot req-medio"></span> Medio (= 2)</span>
+  <span><span class="req-dot req-normal"></span> Normal (= 1)</span>
+  <span><span class="req-dot req-gestionado"></span> Gestionado</span>
+</div>
+
+<!-- ══ Filtros ════════════════════════════════════════════════════════════════ -->
+<div class="card shadow-sm mb-3" style="background:#f0f4ff; border-color:#bbdefb;">
+  <div class="card-body py-2">
+    <form method="GET" action="/requerimientos" class="row g-2 align-items-end">
+      {% if current_user.is_admin() %}
+      <div class="col-6 col-md-3">
+        <label class="form-label fw-semibold small mb-1">Faena</label>
+        <select name="faena" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for f in faenas %}
+          <option value="{{ f }}" {{ 'selected' if faena_f == f }}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-6 col-md-3">
+        <label class="form-label fw-semibold small mb-1">Estado</label>
+        <select name="estado" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          <option value="Pendiente"  {{ 'selected' if estado_f == 'Pendiente'  }}>Pendiente</option>
+          <option value="Gestionado" {{ 'selected' if estado_f == 'Gestionado' }}>Gestionado</option>
+        </select>
+      </div>
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+          <i class="bi bi-search"></i> Filtrar
+        </button>
+        <a href="/requerimientos" class="btn btn-outline-secondary btn-sm" title="Limpiar">
+          <i class="bi bi-x-circle"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══ Tabla — escritorio ═════════════════════════════════════════════════════ -->
+{% if reqs %}
+<div class="d-none d-md-block">
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead style="background:#1a3a5c; color:white;">
+          <tr>
+            <th style="width:28px">#</th>
+            <th>Ítem defectuoso</th>
+            <th>Faena</th>
+            <th>Recinto</th>
+            <th class="text-center">Cantidad</th>
+            <th class="text-center">Último reporte</th>
+            <th class="text-center">Estado</th>
+            <th class="text-center">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in reqs %}
+          {% set es_critico   = r['cantidad'] >= 3 and r['estado'] == 'Pendiente' %}
+          {% set es_medio     = r['cantidad'] == 2 and r['estado'] == 'Pendiente' %}
+          {% set es_gestionado = r['estado'] == 'Gestionado' %}
+          <tr class="{{ 'req-row-critico' if es_critico else ('req-row-medio' if es_medio else ('req-row-gestionado' if es_gestionado else '')) }}">
+            <td class="text-muted">{{ loop.index }}</td>
+            <td class="fw-semibold">{{ r['item_nombre'] }}</td>
+            <td><span class="badge bg-secondary">{{ r['faena'] or '—' }}</span></td>
+            <td><i class="bi bi-building text-secondary me-1"></i>{{ r['recinto'] or '—' }}</td>
+            <td class="text-center">
+              <span class="badge req-cant-badge
+                {{ 'bg-danger' if es_critico else ('bg-warning text-dark' if es_medio else ('bg-success' if es_gestionado else 'bg-primary')) }}
+                fs-6">
+                {{ r['cantidad'] }}
+              </span>
+            </td>
+            <td class="text-center text-muted">{{ r['fecha_ultimo_reporte'] or '—' }}</td>
+            <td class="text-center">
+              <span class="badge {{ 'req-est-pendiente' if r['estado'] == 'Pendiente' else 'req-est-gestionado' }}">
+                {{ r['estado'] }}
+              </span>
+            </td>
+            <td class="text-center">
+              {% if r['estado'] == 'Pendiente' %}
+              <form method="POST" action="/requerimientos/{{ r['id'] }}/gestionar"
+                    onsubmit="return confirm('¿Marcar como Gestionado?')">
+                <button type="submit" class="btn btn-sm btn-success">
+                  <i class="bi bi-check-lg"></i> Gestionar
+                </button>
+              </form>
+              {% else %}
+              <span class="text-muted fst-italic small">
+                <i class="bi bi-check-circle-fill text-success me-1"></i>Listo
+              </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Tarjetas — móvil ════════════════════════════════════════════════════════ -->
+<div class="d-md-none">
+  {% for r in reqs %}
+  {% set es_critico    = r['cantidad'] >= 3 and r['estado'] == 'Pendiente' %}
+  {% set es_medio      = r['cantidad'] == 2 and r['estado'] == 'Pendiente' %}
+  {% set es_gestionado = r['estado'] == 'Gestionado' %}
+  <div class="card mb-2 shadow-sm
+    {{ 'border-danger' if es_critico else ('border-warning' if es_medio else ('req-card-gestionado' if es_gestionado else '')) }}">
+    <div class="card-body py-2 px-3">
+      <div class="d-flex justify-content-between align-items-start mb-1">
+        <div class="fw-semibold">{{ r['item_nombre'] }}</div>
+        <span class="badge
+          {{ 'bg-danger' if es_critico else ('bg-warning text-dark' if es_medio else ('bg-success' if es_gestionado else 'bg-primary')) }}
+          fs-6 ms-2">
+          {{ r['cantidad'] }}×
+        </span>
+      </div>
+      <div class="small text-muted mb-1">
+        <i class="bi bi-building me-1"></i>{{ r['recinto'] or '—' }}
+        <span class="ms-2"><i class="bi bi-geo-alt me-1"></i>{{ r['faena'] or '—' }}</span>
+      </div>
+      <div class="d-flex justify-content-between align-items-center mt-2">
+        <div>
+          <span class="badge {{ 'req-est-pendiente' if r['estado'] == 'Pendiente' else 'req-est-gestionado' }}">
+            {{ r['estado'] }}
+          </span>
+          <span class="small text-muted ms-2">
+            <i class="bi bi-calendar2 me-1"></i>{{ r['fecha_ultimo_reporte'] or '—' }}
+          </span>
+        </div>
+        {% if r['estado'] == 'Pendiente' %}
+        <form method="POST" action="/requerimientos/{{ r['id'] }}/gestionar"
+              onsubmit="return confirm('¿Marcar como Gestionado?')">
+          <button type="submit" class="btn btn-sm btn-success">
+            <i class="bi bi-check-lg"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-cart-check" style="font-size:3.5rem; color:#2e7d32; opacity:.5;"></i>
+  <p class="mt-2 fs-5">
+    {% if faena_f or estado_f %}
+      No hay requerimientos con esos filtros.
+    {% else %}
+      Sin requerimientos registrados.
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+
+{% endblock %}
