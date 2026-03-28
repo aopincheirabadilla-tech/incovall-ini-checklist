@@ -7,7 +7,16 @@
   <h4 class="fw-bold mb-0">
     <i class="bi bi-cart3 text-primary me-2"></i>Requerimientos de Materiales
   </h4>
-  <span class="badge bg-secondary fs-6">{{ reqs | length }} resultado{{ 's' if reqs | length != 1 }}</span>
+  <div class="d-flex gap-2 align-items-center">
+    <span class="badge bg-secondary fs-6">{{ reqs | length }} resultado{{ 's' if reqs | length != 1 }}</span>
+    {% set export_qs = [] %}
+    {% if faena_f  %}{% set _ = export_qs.append('faena='  ~ faena_f)  %}{% endif %}
+    {% if estado_f %}{% set _ = export_qs.append('estado=' ~ estado_f) %}{% endif %}
+    <a href="/requerimientos/exportar{% if export_qs %}?{{ export_qs | join('&') }}{% endif %}"
+       class="btn btn-success btn-sm fw-semibold">
+      <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+    </a>
+  </div>
 </div>
 
 <!-- ══ KPIs ═══════════════════════════════════════════════════════════════════ -->

@@ -946,6 +946,132 @@ def requerimientos():
                            max_cantidad=max_cantidad)
 
 
+@app.route('/requerimientos/exportar')
+@login_required
+def req_exportar():
+    if not current_user.is_supervisor():
+        flash('Acceso restringido.', 'danger')
+        return redirect(url_for('index'))
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    faena_f  = request.args.get('faena',  '').strip()
+    estado_f = request.args.get('estado', '').strip()
+
+    q = 'SELECT * FROM requerimientos WHERE 1=1'
+    p = []
+    if faena_f:
+        q += ' AND faena=?'
+        p.append(faena_f)
+    if current_user.rol == 'supervisor':
+        q += ' AND faena=?'
+        p.append(current_user.faena)
+    if estado_f:
+        q += ' AND estado=?'
+        p.append(estado_f)
+    q += ' ORDER BY cantidad DESC, fecha_ultimo_reporte DESC'
+
+    conn = get_db()
+    reqs = conn.execute(q, p).fetchall()
+    conn.close()
+
+    # ── Estilos ─────────────────────────────────────────────────────────────
+    AZUL_HDR    = PatternFill('solid', fgColor='1A3A5C')
+    ROJO_CLARO  = PatternFill('solid', fgColor='FFCDD2')
+    AMAR_CLARO  = PatternFill('solid', fgColor='FFF9C4')
+    VERDE_CLARO = PatternFill('solid', fgColor='C8E6C9')
+    BLANCO      = PatternFill('solid', fgColor='FFFFFF')
+    thin  = Side(style='thin', color='BDBDBD')
+    borde = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # ── Libro ────────────────────────────────────────────────────────────────
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Requerimientos INCOVALL'
+
+    # Fila 1: Título fusionado
+    ws.merge_cells('A1:G1')
+    c = ws['A1']
+    c.value     = 'Solicitud de Materiales — INCOVALL'
+    c.font      = Font(bold=True, size=14, color='1A3A5C')
+    c.alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 28
+
+    # Fila 2: metadatos
+    fecha_gen = datetime.now().strftime('%d-%m-%Y')
+    ws['A2'] = f'Fecha de generación: {fecha_gen}'
+    ws['A2'].font = Font(italic=True, size=10, color='555555')
+    ws['D2'] = f'Generado por: {current_user.nombre_completo}'
+    ws['D2'].font = Font(italic=True, size=10, color='555555')
+
+    # Fila 3: vacía
+    ws.row_dimensions[3].height = 8
+
+    # Fila 4: encabezados
+    headers = ['N°', 'Ítem defectuoso', 'Faena', 'Recinto', 'Cantidad', 'Estado', 'Último reporte']
+    for col, hdr in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=hdr)
+        cell.font      = Font(bold=True, color='FFFFFF', size=11)
+        cell.fill      = AZUL_HDR
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border    = borde
+    ws.row_dimensions[4].height = 20
+
+    # Filas de datos
+    for idx, r in enumerate(reqs, 1):
+        row_num  = idx + 4
+        cantidad = r['cantidad']
+        estado   = r['estado']
+        if estado == 'Gestionado':
+            fill = VERDE_CLARO
+        elif cantidad >= 3:
+            fill = ROJO_CLARO
+        elif cantidad == 2:
+            fill = AMAR_CLARO
+        else:
+            fill = BLANCO
+        vals = [idx, r['item_nombre'], r['faena'] or '', r['recinto'] or '',
+                cantidad, estado, r['fecha_ultimo_reporte'] or '']
+        for col, val in enumerate(vals, 1):
+            cell = ws.cell(row=row_num, column=col, value=val)
+            cell.fill      = fill
+            cell.border    = borde
+            cell.alignment = Alignment(vertical='center',
+                                       horizontal='center' if col in (1, 5) else 'left')
+
+    # Última fila: total pendientes
+    total_pend = sum(1 for r in reqs if r['estado'] == 'Pendiente')
+    last_row = len(reqs) + 5
+    ws.merge_cells(f'A{last_row}:D{last_row}')
+    c = ws.cell(row=last_row, column=1, value=f'Total ítems pendientes: {total_pend}')
+    c.font      = Font(bold=True, size=11)
+    c.alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[last_row].height = 18
+
+    # Anchos de columna
+    col_widths = [5, 32, 20, 26, 10, 14, 18]
+    for col, width in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(col)].width = width
+
+    # Congelar encabezados
+    ws.freeze_panes = 'A5'
+
+    # ── Respuesta ────────────────────────────────────────────────────────────
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    fname_suffix = f'_{faena_f}' if faena_f else ''
+    fname = f'Requerimientos_INCOVALL{fname_suffix}_{datetime.now().strftime("%Y%m%d")}.xlsx'
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=fname
+    )
+
+
 @app.route('/requerimientos/<int:req_id>/gestionar', methods=['POST'])
 @login_required
 def req_gestionar(req_id):
