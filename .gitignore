@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Base de datos
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+.env/
+
+# Claude Code
+.claude/
+
+# Archivos temporales y del sistema
+*.tmp
+*.temp
+*.log
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Distribución / build de Python
+dist/
+build/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.user

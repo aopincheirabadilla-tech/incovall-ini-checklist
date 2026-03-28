@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Historial – INCOVALL{% endblock %}
+
+{% block content %}
+
+<!-- ══ Filtros ═════════════════════════════════════════════════════════════ -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header text-white fw-bold" style="background:#0d47a1;">
+    <i class="bi bi-funnel"></i> Filtrar Inspecciones
+  </div>
+  <div class="card-body">
+    <form method="GET" action="/historial">
+      <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold">Recinto</label>
+          <input type="text" class="form-control" name="recinto"
+                 value="{{ recinto }}" placeholder="Buscar por recinto…">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold">Desde</label>
+          <input type="date" class="form-control" name="fecha_desde"
+                 value="{{ fecha_desde }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold">Hasta</label>
+          <input type="date" class="form-control" name="fecha_hasta"
+                 value="{{ fecha_hasta }}">
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-2">
+          <button type="submit" class="btn btn-primary flex-fill fw-semibold">
+            <i class="bi bi-search"></i> Buscar
+          </button>
+          <a href="/historial" class="btn btn-outline-secondary" title="Limpiar filtros">
+            <i class="bi bi-x-circle"></i>
+          </a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══ Resultado ══════════════════════════════════════════════════════════ -->
+{% if inspecciones %}
+<p class="text-muted small mb-2">
+  <i class="bi bi-list-check"></i>
+  Se encontraron <strong>{{ inspecciones | length }}</strong>
+  inspección{% if inspecciones | length != 1 %}es{% endif %}.
+</p>
+
+<!-- Vista escritorio: tabla -->
+<div class="d-none d-md-block">
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover table-striped mb-0 align-middle">
+        <thead style="background:#0d47a1; color:white;">
+          <tr>
+            <th>Correlativo</th>
+            <th>Fecha</th>
+            <th>Recinto</th>
+            <th>Valle / Faena</th>
+            <th>Inspector</th>
+            <th>Cliente</th>
+            <th class="text-center">PDF</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for insp in inspecciones %}
+          <tr>
+            <td><span class="badge" style="background:#1565C0;">{{ insp['correlativo'] }}</span></td>
+            <td>{{ insp['fecha'] }}</td>
+            <td class="fw-semibold">{{ insp['nombre_recinto'] }}</td>
+            <td>{{ insp['valle'] }} / {{ insp['faena'] }}</td>
+            <td>{{ insp['nombre_inspector'] }}</td>
+            <td>{{ insp['cliente'] }}</td>
+            <td class="text-center">
+              <a href="/pdf/{{ insp['id'] }}"
+                 class="btn btn-sm btn-outline-danger fw-semibold"
+                 title="Descargar PDF">
+                <i class="bi bi-file-earmark-pdf"></i> PDF
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Vista móvil: tarjetas -->
+<div class="d-md-none">
+  {% for insp in inspecciones %}
+  <div class="card mb-3 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center"
+         style="background:#E3F2FD;">
+      <span class="fw-bold text-primary">{{ insp['correlativo'] }}</span>
+      <span class="text-muted small">{{ insp['fecha'] }}</span>
+    </div>
+    <div class="card-body py-2">
+      <p class="mb-1 fw-semibold fs-6">{{ insp['nombre_recinto'] }}</p>
+      <p class="mb-1 small text-muted">
+        <i class="bi bi-geo-alt"></i> {{ insp['valle'] }} / {{ insp['faena'] }}
+      </p>
+      <p class="mb-1 small text-muted">
+        <i class="bi bi-person"></i> {{ insp['nombre_inspector'] }}
+      </p>
+      <p class="mb-2 small text-muted">
+        <i class="bi bi-building"></i> {{ insp['cliente'] }}
+      </p>
+      <a href="/pdf/{{ insp['id'] }}"
+         class="btn btn-danger btn-sm w-100 fw-semibold">
+        <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-inbox" style="font-size:3rem;"></i>
+  <p class="mt-2 fs-5">
+    {% if recinto or fecha_desde or fecha_hasta %}
+      No se encontraron inspecciones con esos filtros.
+    {% else %}
+      Aún no hay inspecciones registradas.
+    {% endif %}
+  </p>
+  <a href="/" class="btn btn-primary mt-2">
+    <i class="bi bi-plus-circle"></i> Crear primera inspección
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

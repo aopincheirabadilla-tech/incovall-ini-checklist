@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Nueva Inspección – INCOVALL{% endblock %}
+
+{% block content %}
+<form id="formInspeccion" method="POST" action="/guardar">
+
+  <!-- ══ Encabezado ══════════════════════════════════════════════════════ -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header text-white d-flex justify-content-between align-items-center"
+         style="background:#0d47a1;">
+      <span class="fw-bold"><i class="bi bi-clipboard2-check"></i> Datos de la Inspección</span>
+      <span class="badge bg-warning text-dark fs-6" id="badge-corr">{{ correlativo }}</span>
+    </div>
+    <div class="card-body">
+      <input type="hidden" name="correlativo" value="{{ correlativo }}">
+
+      <div class="row g-3">
+        <div class="col-6 col-md-4">
+          <label class="form-label fw-semibold">Valle <span class="text-danger">*</span></label>
+          <input type="text" class="form-control form-control-lg" name="valle"
+                 placeholder="Ej: Valle Central" required>
+        </div>
+        <div class="col-6 col-md-4">
+          <label class="form-label fw-semibold">Faena <span class="text-danger">*</span></label>
+          <input type="text" class="form-control form-control-lg" name="faena"
+                 placeholder="Nombre de faena" required>
+        </div>
+        <div class="col-6 col-md-4">
+          <label class="form-label fw-semibold">Fecha <span class="text-danger">*</span></label>
+          <input type="date" class="form-control form-control-lg" name="fecha"
+                 value="{{ today }}" required>
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold">Nombre del Recinto <span class="text-danger">*</span></label>
+          <input type="text" class="form-control form-control-lg" name="nombre_recinto"
+                 placeholder="Ej: Camarín Norte" required>
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold">Cliente <span class="text-danger">*</span></label>
+          <input type="text" class="form-control form-control-lg" name="cliente"
+                 placeholder="Nombre del cliente" required>
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold">Nombre del Inspector <span class="text-danger">*</span></label>
+          <input type="text" class="form-control form-control-lg" name="nombre_inspector"
+                 placeholder="Nombre completo del inspector" required>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Checklist ═══════════════════════════════════════════════════════ -->
+  {% set ns = namespace(idx=0) %}
+  {% for seccion, items in secciones.items() %}
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-header text-white fw-bold fs-6"
+         style="background:#1565C0;">
+      {% if seccion == 'SISTEMA SANITARIO' %}<i class="bi bi-droplet-half"></i>
+      {% elif seccion == 'SISTEMA ELÉCTRICO' %}<i class="bi bi-lightning-charge"></i>
+      {% elif seccion == 'INFRAESTRUCTURA GENERAL' %}<i class="bi bi-building"></i>
+      {% elif seccion == 'SISTEMA DE ALCANTARILLADO' %}<i class="bi bi-pipe"></i>
+      {% else %}<i class="bi bi-check-circle"></i>{% endif %}
+      {{ seccion }}
+    </div>
+
+    <!-- Encabezado de columnas (solo escritorio) -->
+    <div class="d-none d-md-flex checklist-header px-3 py-1 border-bottom bg-light small fw-bold text-muted">
+      <div style="flex:1">Ítem</div>
+      <div class="text-center" style="width:80px">SI</div>
+      <div class="text-center" style="width:80px">NO</div>
+      <div class="text-center" style="width:80px">N/A</div>
+      <div style="width:220px; padding-left:8px">Comentario</div>
+    </div>
+
+    <div class="card-body p-0">
+      {% for item in items %}
+      {% set i = ns.idx %}
+      <div class="checklist-row {% if loop.index % 2 == 0 %}bg-fila{% endif %}">
+
+        <!-- Nombre del ítem -->
+        <div class="item-name">{{ item }}</div>
+
+        <!-- Botones SI / NO / N/A -->
+        <div class="item-buttons" data-idx="{{ i }}">
+          <button type="button" class="btn-chk btn-si" onclick="elegir(this, {{ i }}, 'SI')">
+            <i class="bi bi-check-lg d-none d-md-inline"></i> SI
+          </button>
+          <button type="button" class="btn-chk btn-no" onclick="elegir(this, {{ i }}, 'NO')">
+            <i class="bi bi-x-lg d-none d-md-inline"></i> NO
+          </button>
+          <button type="button" class="btn-chk btn-na" onclick="elegir(this, {{ i }}, 'N/A')">
+            N/A
+          </button>
+          <input type="hidden" name="valor_{{ i }}" id="val_{{ i }}" value="N/A">
+        </div>
+
+        <!-- Comentario -->
+        <div class="item-comment">
+          <input type="text" class="form-control form-control-sm"
+                 name="comentario_{{ i }}"
+                 placeholder="Comentario opcional…"
+                 autocomplete="off">
+        </div>
+      </div>
+      {% set ns.idx = ns.idx + 1 %}
+      {% endfor %}
+    </div>
+  </div>
+
+  {% endfor %}
+
+  <!-- ══ Observaciones ═══════════════════════════════════════════════════ -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header text-white fw-bold" style="background:#0d47a1;">
+      <i class="bi bi-pencil-square"></i> Observaciones Generales
+    </div>
+    <div class="card-body">
+      <textarea class="form-control" name="observaciones" rows="4"
+                placeholder="Ingrese las observaciones generales de la inspección…"></textarea>
+    </div>
+  </div>
+
+  <!-- ══ Supervisor ══════════════════════════════════════════════════════ -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header text-white fw-bold" style="background:#0d47a1;">
+      <i class="bi bi-person-badge"></i> Supervisor Responsable
+    </div>
+    <div class="card-body">
+      <input type="text" class="form-control form-control-lg" name="supervisor"
+             placeholder="Nombre del supervisor" required>
+    </div>
+  </div>
+
+  <!-- ══ Botón Guardar ═══════════════════════════════════════════════════ -->
+  <div class="d-grid gap-2 mb-5">
+    <button type="submit" class="btn btn-success btn-xl fw-bold" id="btn-guardar">
+      <i class="bi bi-save2"></i> &nbsp;Guardar Inspección y Descargar PDF
+    </button>
+  </div>
+
+</form>
+
+<!-- Barra de progreso flotante -->
+<div id="progreso-overlay" class="d-none">
+  <div class="progreso-box">
+    <div class="spinner-border text-primary mb-3" role="status"></div>
+    <p class="fw-bold mb-1">Guardando inspección…</p>
+    <p class="text-muted small">Generando PDF, por favor espere.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Selección SI / NO / N/A ─────────────────────────────────────── */
+function elegir(btn, idx, valor) {
+  const grupo = btn.closest('.item-buttons');
+  grupo.querySelectorAll('.btn-chk').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+  document.getElementById('val_' + idx).value = valor;
+
+  // Colorear la fila según selección
+  const fila = btn.closest('.checklist-row');
+  fila.classList.remove('fila-si', 'fila-no', 'fila-na');
+  if (valor === 'SI')  fila.classList.add('fila-si');
+  if (valor === 'NO')  fila.classList.add('fila-no');
+  if (valor === 'N/A') fila.classList.add('fila-na');
+}
+
+/* ── Inicializar N/A como activo por defecto ────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.item-buttons').forEach(grupo => {
+    const btnNa = grupo.querySelector('.btn-na');
+    if (btnNa) btnNa.classList.add('activo');
+  });
+});
+
+/* ── Spinner al guardar ─────────────────────────────────────────── */
+document.getElementById('formInspeccion').addEventListener('submit', () => {
+  document.getElementById('progreso-overlay').classList.remove('d-none');
+  document.getElementById('btn-guardar').disabled = true;
+});
+</script>
+{% endblock %}

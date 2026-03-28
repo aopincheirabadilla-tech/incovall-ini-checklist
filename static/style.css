@@ -1,0 +1,195 @@
+/* ══ Variables ══════════════════════════════════════════════════════════════ */
+:root {
+  --azul:       #0d47a1;
+  --azul-sec:   #1565C0;
+  --azul-light: #E3F2FD;
+  --verde:      #2e7d32;
+  --verde-bg:   #c8e6c9;
+  --rojo:       #c62828;
+  --rojo-bg:    #ffcdd2;
+  --gris:       #757575;
+  --gris-bg:    #e0e0e0;
+}
+
+/* ══ Global ══════════════════════════════════════════════════════════════════ */
+body {
+  background: #f4f6fb;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ── Logos en navbar ─────────────────────────────────────────────────────── */
+.nav-logo-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.nav-logo {
+  height: 46px;
+  max-width: 130px;
+  object-fit: contain;
+  background: white;
+  border-radius: 7px;
+  padding: 4px 7px;
+}
+
+.logo-fallback {
+  display: flex;
+  align-items: center;
+  background: rgba(255,255,255,0.15);
+  border-radius: 7px;
+  padding: 4px 10px;
+  height: 46px;
+}
+
+.logo-badge {
+  background: white;
+  color: var(--azul);
+  font-weight: 900;
+  font-size: 0.85rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -1px;
+}
+
+.nav-title-center {
+  min-width: 0;
+}
+
+@media (max-width: 400px) {
+  .nav-logo { height: 36px; max-width: 90px; }
+  .logo-fallback { height: 36px; padding: 3px 7px; }
+  .nav-title-center { display: none !important; }
+}
+
+/* ══ Botón XL ════════════════════════════════════════════════════════════════ */
+.btn-xl {
+  font-size: 1.15rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+}
+
+/* ══ Checklist ═══════════════════════════════════════════════════════════════ */
+.checklist-header {
+  display: flex;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.checklist-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid #e8eaf0;
+  gap: 0.4rem;
+  transition: background 0.15s;
+}
+
+.bg-fila { background: #f8f9fe; }
+
+/* Colores según valor seleccionado */
+.fila-si  { background: #f0fff0 !important; }
+.fila-no  { background: #fff5f5 !important; }
+.fila-na  { background: #fafafa !important; }
+
+/* Nombre del ítem */
+.item-name {
+  flex: 1 1 160px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  min-width: 120px;
+}
+
+/* Grupo de botones */
+.item-buttons {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Comentario */
+.item-comment {
+  flex: 1 1 160px;
+  min-width: 120px;
+}
+
+/* ══ Botones SI / NO / N/A ═══════════════════════════════════════════════════ */
+.btn-chk {
+  border: 2px solid;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: white;
+  min-width: 52px;
+  line-height: 1.2;
+}
+
+/* Estado inactivo */
+.btn-si  { color: var(--verde); border-color: #a5d6a7; }
+.btn-no  { color: var(--rojo);  border-color: #ef9a9a; }
+.btn-na  { color: var(--gris);  border-color: #bdbdbd; }
+
+.btn-chk:hover { filter: brightness(0.93); }
+
+/* Estado ACTIVO */
+.btn-si.activo  { background: var(--verde); color: white; border-color: var(--verde); }
+.btn-no.activo  { background: var(--rojo);  color: white; border-color: var(--rojo);  }
+.btn-na.activo  { background: var(--gris);  color: white; border-color: var(--gris);  }
+
+/* En móvil: botones más grandes */
+@media (max-width: 575px) {
+  .btn-chk {
+    font-size: 0.95rem;
+    padding: 0.55rem 0.8rem;
+    min-width: 58px;
+  }
+  .item-name {
+    flex: 1 1 100%;
+    font-size: 1rem;
+  }
+  .item-comment {
+    flex: 1 1 100%;
+  }
+}
+
+/* ══ Overlay de carga ════════════════════════════════════════════════════════ */
+#progreso-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progreso-box {
+  background: white;
+  border-radius: 16px;
+  padding: 2.5rem 3rem;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+
+/* ══ Cards ═══════════════════════════════════════════════════════════════════ */
+.card {
+  border-radius: 12px;
+  border: 1px solid #e0e4ef;
+}
+.card-header {
+  border-radius: 12px 12px 0 0 !important;
+}
+
+/* ══ Badge de correlativo ════════════════════════════════════════════════════ */
+#badge-corr {
+  font-family: 'Consolas', monospace;
+  letter-spacing: 0.5px;
+}
