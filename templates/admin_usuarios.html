@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Gestión de Usuarios – INCOVALL{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0">
+    <i class="bi bi-people-fill text-primary me-2"></i>Gestión de Usuarios
+  </h4>
+  <a href="/admin/usuarios/nuevo" class="btn btn-success fw-semibold">
+    <i class="bi bi-person-plus"></i> Nuevo Usuario
+  </a>
+</div>
+
+<!-- Resumen por rol -->
+<div class="row g-2 mb-4">
+  {% set counts = {'admin': 0, 'supervisor': 0, 'inspector': 0} %}
+  {% for u in usuarios %}
+    {% if u['rol'] == 'admin' %}{% set _ = counts.update({'admin': counts['admin'] + 1}) %}{% endif %}
+    {% if u['rol'] == 'supervisor' %}{% set _ = counts.update({'supervisor': counts['supervisor'] + 1}) %}{% endif %}
+    {% if u['rol'] == 'inspector' %}{% set _ = counts.update({'inspector': counts['inspector'] + 1}) %}{% endif %}
+  {% endfor %}
+  <div class="col-4 col-md-3">
+    <div class="card text-center border-danger">
+      <div class="card-body py-2">
+        <div class="fs-3 fw-bold text-danger">{{ counts['admin'] }}</div>
+        <div class="small text-muted">Administradores</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-4 col-md-3">
+    <div class="card text-center border-warning">
+      <div class="card-body py-2">
+        <div class="fs-3 fw-bold text-warning">{{ counts['supervisor'] }}</div>
+        <div class="small text-muted">Supervisores</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-4 col-md-3">
+    <div class="card text-center border-primary">
+      <div class="card-body py-2">
+        <div class="fs-3 fw-bold text-primary">{{ counts['inspector'] }}</div>
+        <div class="small text-muted">Inspectores</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Vista escritorio -->
+<div class="d-none d-md-block">
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead style="background:#0d47a1; color:white;">
+          <tr>
+            <th>Usuario</th>
+            <th>Nombre Completo</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Faena</th>
+            <th class="text-center">Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in usuarios %}
+          <tr class="{% if not u['activo'] %}table-secondary text-muted{% endif %}">
+            <td>
+              <span class="fw-semibold font-monospace">{{ u['username'] }}</span>
+            </td>
+            <td>{{ u['nombre_completo'] }}</td>
+            <td class="small">{{ u['email'] or '—' }}</td>
+            <td>
+              <span class="badge
+                {% if u['rol'] == 'admin' %}bg-danger
+                {% elif u['rol'] == 'supervisor' %}bg-warning text-dark
+                {% else %}bg-primary{% endif %}">
+                {{ u['rol'] | capitalize }}
+              </span>
+            </td>
+            <td class="small">{{ u['faena'] or '—' }}</td>
+            <td class="text-center">
+              {% if u['activo'] %}
+                <span class="badge bg-success">Activo</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <div class="d-flex gap-1 justify-content-center">
+                <a href="/admin/usuarios/{{ u['id'] }}/editar"
+                   class="btn btn-sm btn-outline-primary" title="Editar">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                {% if u['id'] != current_user.id %}
+                <form method="POST" action="/admin/usuarios/{{ u['id'] }}/toggle"
+                      onsubmit="return confirm('¿Cambiar estado de este usuario?')">
+                  <button type="submit"
+                          class="btn btn-sm {{ 'btn-outline-danger' if u['activo'] else 'btn-outline-success' }}"
+                          title="{{ 'Desactivar' if u['activo'] else 'Activar' }}">
+                    <i class="bi {{ 'bi-person-dash' if u['activo'] else 'bi-person-check' }}"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Vista móvil: tarjetas -->
+<div class="d-md-none">
+  {% for u in usuarios %}
+  <div class="card mb-3 shadow-sm {% if not u['activo'] %}border-secondary{% endif %}">
+    <div class="card-header d-flex justify-content-between align-items-center
+                {% if not u['activo'] %}bg-light text-muted{% else %}bg-white{% endif %}">
+      <span class="fw-bold font-monospace">{{ u['username'] }}</span>
+      <div class="d-flex gap-1">
+        <span class="badge
+          {% if u['rol'] == 'admin' %}bg-danger
+          {% elif u['rol'] == 'supervisor' %}bg-warning text-dark
+          {% else %}bg-primary{% endif %}">
+          {{ u['rol'] | capitalize }}
+        </span>
+        <span class="badge {{ 'bg-success' if u['activo'] else 'bg-secondary' }}">
+          {{ 'Activo' if u['activo'] else 'Inactivo' }}
+        </span>
+      </div>
+    </div>
+    <div class="card-body py-2">
+      <p class="mb-1 fw-semibold">{{ u['nombre_completo'] }}</p>
+      <p class="mb-1 small text-muted">
+        <i class="bi bi-envelope"></i> {{ u['email'] or '—' }}
+      </p>
+      <p class="mb-2 small text-muted">
+        <i class="bi bi-building"></i> {{ u['faena'] or '—' }}
+      </p>
+      <div class="d-flex gap-2">
+        <a href="/admin/usuarios/{{ u['id'] }}/editar"
+           class="btn btn-outline-primary btn-sm flex-fill">
+          <i class="bi bi-pencil"></i> Editar
+        </a>
+        {% if u['id'] != current_user.id %}
+        <form method="POST" action="/admin/usuarios/{{ u['id'] }}/toggle" class="flex-fill"
+              onsubmit="return confirm('¿Cambiar estado?')">
+          <button type="submit"
+                  class="btn btn-sm w-100 {{ 'btn-outline-danger' if u['activo'] else 'btn-outline-success' }}">
+            {{ 'Desactivar' if u['activo'] else 'Activar' }}
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

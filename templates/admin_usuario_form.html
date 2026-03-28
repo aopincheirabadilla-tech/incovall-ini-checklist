@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}{{ accion }} Usuario – INCOVALL{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7 col-lg-5">
+
+    <div class="card shadow-sm">
+      <div class="card-header text-white fw-bold" style="background:#0d47a1;">
+        <i class="bi bi-person-{{ 'plus' if accion == 'Nuevo' else 'gear' }}"></i>
+        {{ accion }} Usuario
+      </div>
+      <div class="card-body">
+        <form method="POST">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Usuario <span class="text-danger">*</span>
+            </label>
+            <input type="text" name="username" class="form-control"
+                   value="{{ usuario['username'] if usuario else '' }}"
+                   placeholder="ej: jperez" autocomplete="off" required
+                   {% if usuario and usuario['id'] == current_user.id %}readonly{% endif %}>
+            <div class="form-text">Nombre de usuario para iniciar sesión.</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Nombre Completo <span class="text-danger">*</span>
+            </label>
+            <input type="text" name="nombre_completo" class="form-control"
+                   value="{{ usuario['nombre_completo'] if usuario else '' }}"
+                   placeholder="Nombre completo del trabajador" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Email</label>
+            <input type="email" name="email" class="form-control"
+                   value="{{ usuario['email'] if usuario else '' }}"
+                   placeholder="correo@ejemplo.com">
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">
+                Rol <span class="text-danger">*</span>
+              </label>
+              <select name="rol" class="form-select"
+                      {% if usuario and usuario['id'] == current_user.id %}disabled{% endif %}>
+                {% for r in roles %}
+                <option value="{{ r }}"
+                  {{ 'selected' if (usuario and usuario['rol'] == r) or (not usuario and r == 'inspector') }}>
+                  {{ r | capitalize }}
+                </option>
+                {% endfor %}
+              </select>
+              {% if usuario and usuario['id'] == current_user.id %}
+              <input type="hidden" name="rol" value="{{ usuario['rol'] }}">
+              {% endif %}
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Faena Asignada</label>
+              <select name="faena" class="form-select">
+                <option value="">— Sin faena —</option>
+                {% for f in faenas %}
+                <option value="{{ f }}"
+                  {{ 'selected' if usuario and usuario['faena'] == f }}>
+                  {{ f }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Contraseña
+              {% if accion == 'Nuevo' %}<span class="text-danger">*</span>{% endif %}
+            </label>
+            <div class="input-group">
+              <input type="password" name="password" id="pw-field" class="form-control"
+                     placeholder="{{ 'Contraseña nueva' if accion == 'Nuevo' else 'Dejar vacío para no cambiar' }}"
+                     {{ 'required' if accion == 'Nuevo' }}>
+              <button class="btn btn-outline-secondary" type="button" onclick="togglePw()">
+                <i class="bi bi-eye" id="pw-eye"></i>
+              </button>
+            </div>
+            {% if accion == 'Editar' %}
+            <div class="form-text">Deja vacío para mantener la contraseña actual.</div>
+            {% endif %}
+          </div>
+
+          {% if not (usuario and usuario['id'] == current_user.id) %}
+          <div class="mb-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="activo" id="activo"
+                     {{ 'checked' if not usuario or usuario['activo'] }}>
+              <label class="form-check-label fw-semibold" for="activo">Usuario activo</label>
+            </div>
+          </div>
+          {% else %}
+          <input type="hidden" name="activo" value="1">
+          {% endif %}
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary flex-fill fw-semibold">
+              <i class="bi bi-check-lg"></i> Guardar
+            </button>
+            <a href="/admin/usuarios" class="btn btn-outline-secondary">
+              Cancelar
+            </a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePw() {
+  const f = document.getElementById('pw-field');
+  const e = document.getElementById('pw-eye');
+  f.type = f.type === 'password' ? 'text' : 'password';
+  e.className = f.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+}
+</script>
+{% endblock %}

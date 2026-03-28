@@ -22,8 +22,19 @@
         </div>
         <div class="col-6 col-md-4">
           <label class="form-label fw-semibold">Faena <span class="text-danger">*</span></label>
+          {% if current_user.faena %}
+          <select class="form-select form-select-lg" name="faena" required>
+            <option value="{{ current_user.faena }}" selected>{{ current_user.faena }}</option>
+            {% for f in ['Planta Magnetita', 'PPT', 'CNN', 'Otra'] %}
+              {% if f != current_user.faena %}
+              <option value="{{ f }}">{{ f }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          {% else %}
           <input type="text" class="form-control form-control-lg" name="faena"
                  placeholder="Nombre de faena" required>
+          {% endif %}
         </div>
         <div class="col-6 col-md-4">
           <label class="form-label fw-semibold">Fecha <span class="text-danger">*</span></label>
@@ -43,6 +54,7 @@
         <div class="col-12">
           <label class="form-label fw-semibold">Nombre del Inspector <span class="text-danger">*</span></label>
           <input type="text" class="form-control form-control-lg" name="nombre_inspector"
+                 value="{{ current_user.nombre_completo }}"
                  placeholder="Nombre completo del inspector" required>
         </div>
       </div>
