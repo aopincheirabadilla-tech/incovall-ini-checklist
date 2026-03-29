@@ -32,8 +32,38 @@ login_manager.login_message = 'Debes iniciar sesión para acceder.'
 login_manager.login_message_category = 'warning'
 
 ROLES  = ['admin', 'supervisor', 'inspector']
-FAENAS = ['Planta Magnetita', 'PPT', 'CNN', 'Otra']
+FAENAS = ['PLANTA MAGNETITA', 'CNN', 'PTT']
 ALLOWED_MIME = {'image/jpeg', 'image/png', 'image/webp'}
+
+# ─── Normalización de faenas ──────────────────────────────────────────────────
+
+_FAENA_VARIANTES = {
+    'PLANTA MAGNETITA': {
+        'magnetita', 'planta magnetita', 'pm', 'p.m.', 'planta mag',
+    },
+    'CNN': {
+        'cnn', 'cerro negro', 'cerro negro norte',
+    },
+    'PTT': {
+        'ptt', 'ppt', 'puerto', 'puerto punta', 'totoralillo', 'totoralilo',
+        'totoralollo', 'puerto punta totoralillo', 'punta totoralillo',
+        'puerto punta totoralollo', 'punta totoralollo', 'puerto totoralollo',
+        'puerto punta totoralilo', 'punta totoralilo',
+    },
+}
+# Índice invertido: variante_en_minúsculas → nombre_oficial
+_FAENA_INDEX: dict = {}
+for _oficial, _vars in _FAENA_VARIANTES.items():
+    _FAENA_INDEX[_oficial.lower()] = _oficial   # el propio nombre oficial
+    for _v in _vars:
+        _FAENA_INDEX[_v.lower()] = _oficial
+
+
+def normalizar_faena(texto: str) -> str:
+    """Devuelve el nombre oficial de la faena o el texto en mayúsculas si no se reconoce."""
+    if not texto:
+        return ''
+    return _FAENA_INDEX.get(texto.strip().lower(), texto.strip().upper())
 ALLOWED_EXT  = {'jpg', 'jpeg', 'png', 'webp'}
 MAX_FOTO_BYTES = 5 * 1024 * 1024  # 5 MB por foto
 
@@ -234,6 +264,14 @@ def init_db():
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # Migración: normalizar faenas existentes en todas las tablas
+    for tabla in ('inspecciones', 'acciones_correctivas', 'requerimientos'):
+        rows = c.execute(f'SELECT id, faena FROM {tabla}').fetchall()
+        for row in rows:
+            norm = normalizar_faena(row[1] or '')
+            if norm != (row[1] or ''):
+                c.execute(f'UPDATE {tabla} SET faena=? WHERE id=?', (norm, row[0]))
 
     # Admin inicial
     if not c.execute("SELECT id FROM usuarios WHERE username='admin'").fetchone():
@@ -471,7 +509,7 @@ def guardar():
         ''', (
             data.get('correlativo'),
             data.get('valle'),
-            data.get('faena'),
+            normalizar_faena(data.get('faena', '')),
             data.get('fecha'),
             data.get('nombre_recinto'),
             data.get('nombre_inspector'),
@@ -517,7 +555,7 @@ def guardar():
                 ''', (
                     inspeccion_id, i,
                     data.get('nombre_recinto', ''),
-                    data.get('faena', ''),
+                    normalizar_faena(data.get('faena', '')),
                     item,
                     comentario or f'Ítem "{item}" marcado como NO en inspección {correlativo}',
                     foto_filename,
@@ -528,7 +566,7 @@ def guardar():
 
                 # Requerimiento: incrementar si existe, crear si no
                 fecha_insp_str = data.get('fecha') or datetime.now().strftime('%Y-%m-%d')
-                req_faena   = data.get('faena', '')
+                req_faena   = normalizar_faena(data.get('faena', ''))
                 req_recinto = data.get('nombre_recinto', '')
                 existing = conn.execute(
                     '''SELECT id FROM requerimientos
@@ -731,11 +769,11 @@ def _acciones_pendientes_usuario():
     return n
 
 
-# Inyectar contador en todos los templates
+# Inyectar contador y utilidades en todos los templates
 @app.context_processor
-def inject_acciones_badge():
+def inject_globals():
     count = _acciones_pendientes_usuario() if current_user.is_authenticated else 0
-    return {'acciones_pendientes_badge': count}
+    return {'acciones_pendientes_badge': count, 'normalizar_faena': normalizar_faena}
 
 
 @app.route('/acciones')

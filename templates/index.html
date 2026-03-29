@@ -23,19 +23,14 @@
         </div>
         <div class="col-6 col-md-4">
           <label class="form-label fw-semibold">Faena <span class="text-danger">*</span></label>
-          {% if current_user.faena %}
           <select class="form-select form-select-lg" name="faena" required>
-            <option value="{{ current_user.faena }}" selected>{{ current_user.faena }}</option>
-            {% for f in ['Planta Magnetita', 'PPT', 'CNN', 'Otra'] %}
-              {% if f != current_user.faena %}
-              <option value="{{ f }}">{{ f }}</option>
-              {% endif %}
+            <option value="" disabled {{ 'selected' if not current_user.faena }}>— Seleccionar —</option>
+            {% for f in ['PLANTA MAGNETITA', 'CNN', 'PTT'] %}
+            <option value="{{ f }}" {{ 'selected' if current_user.faena and normalizar_faena(current_user.faena) == f }}>
+              {{ f }}
+            </option>
             {% endfor %}
           </select>
-          {% else %}
-          <input type="text" class="form-control form-control-lg" name="faena"
-                 placeholder="Nombre de faena" required>
-          {% endif %}
         </div>
         <div class="col-6 col-md-4">
           <label class="form-label fw-semibold">Fecha <span class="text-danger">*</span></label>
