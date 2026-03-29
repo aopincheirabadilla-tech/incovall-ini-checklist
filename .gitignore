@@ -21,6 +21,9 @@ env/
 # Claude Code
 .claude/
 
+# Fotos subidas por usuarios
+static/fotos/
+
 # Archivos temporales y del sistema
 *.tmp
 *.temp
