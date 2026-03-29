@@ -1615,7 +1615,11 @@ def generate_pdf(insp, items, fotos=None):
 # ─── Startup ─────────────────────────────────────────────────────────────────
 # Se llama aquí para que Gunicorn (que importa el módulo directamente) también
 # inicialice la base de datos al arrancar.
-init_db()
+try:
+    init_db()
+except Exception as _e:
+    import logging
+    logging.getLogger(__name__).error('init_db() falló al arrancar: %s', _e, exc_info=True)
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
