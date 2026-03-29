@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Mi Perfil – INCOVALL{% endblock %}
+
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-12 col-sm-9 col-md-6 col-lg-5">
+
+    <h4 class="fw-bold mb-3">
+      <i class="bi bi-person-circle text-primary me-2"></i>Mi Perfil
+    </h4>
+
+    <!-- Info del usuario -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header" style="background:#1a3a5c; color:white;">
+        <i class="bi bi-info-circle me-2"></i>Información de cuenta
+      </div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="detalle-field-label">Usuario</div>
+            <div class="detalle-field-val font-monospace">{{ current_user.username }}</div>
+          </div>
+          <div class="col-6">
+            <div class="detalle-field-label">Rol</div>
+            <div class="detalle-field-val">
+              <span class="badge
+                {% if current_user.rol == 'admin' %}bg-danger
+                {% elif current_user.rol == 'supervisor' %}bg-warning text-dark
+                {% elif current_user.rol == 'lectura' %}bg-info text-dark
+                {% else %}bg-primary{% endif %}">
+                {% if current_user.rol == 'lectura' %}Solo Lectura{% else %}{{ current_user.rol | capitalize }}{% endif %}
+              </span>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="detalle-field-label">Nombre completo</div>
+            <div class="detalle-field-val">{{ current_user.nombre_completo }}</div>
+          </div>
+          {% if current_user.faena %}
+          <div class="col-12">
+            <div class="detalle-field-label">Faena asignada</div>
+            <div class="detalle-field-val">
+              <span class="badge bg-secondary">{{ current_user.faena }}</span>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulario cambio de contraseña -->
+    <div class="card shadow-sm">
+      <div class="card-header" style="background:#1a3a5c; color:white;">
+        <i class="bi bi-key me-2"></i>Cambiar contraseña
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/perfil">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Contraseña actual <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="password_actual" id="pw-actual"
+                     class="form-control" required autocomplete="current-password">
+              <button type="button" class="btn btn-outline-secondary"
+                      onclick="togglePw('pw-actual', this)">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nueva contraseña <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="password_nueva" id="pw-nueva"
+                     class="form-control" required minlength="6"
+                     autocomplete="new-password"
+                     placeholder="Mínimo 6 caracteres">
+              <button type="button" class="btn btn-outline-secondary"
+                      onclick="togglePw('pw-nueva', this)">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Confirmar nueva contraseña <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="password_confirm" id="pw-confirm"
+                     class="form-control" required minlength="6"
+                     autocomplete="new-password"
+                     placeholder="Repite la nueva contraseña">
+              <button type="button" class="btn btn-outline-secondary"
+                      onclick="togglePw('pw-confirm', this)">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary fw-semibold">
+              <i class="bi bi-check-lg me-1"></i>Cambiar contraseña
+            </button>
+            <a href="{{ request.referrer or '/' }}" class="btn btn-outline-secondary">
+              Cancelar
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePw(id, btn) {
+  const input = document.getElementById(id);
+  const icon  = btn.querySelector('i');
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.classList.replace('bi-eye', 'bi-eye-slash');
+  } else {
+    input.type = 'password';
+    icon.classList.replace('bi-eye-slash', 'bi-eye');
+  }
+}
+</script>
+{% endblock %}

@@ -514,6 +514,55 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.route('/perfil', methods=['GET', 'POST'])
+@login_required
+def perfil():
+    if request.method == 'POST':
+        actual      = request.form.get('password_actual', '')
+        nueva       = request.form.get('password_nueva', '')
+        confirmacion= request.form.get('password_confirm', '')
+
+        conn = get_db()
+        row  = conn.execute('SELECT password_hash FROM usuarios WHERE id=?',
+                            (current_user.id,)).fetchone()
+        conn.close()
+
+        if not check_password_hash(row['password_hash'], actual):
+            flash('La contraseña actual es incorrecta.', 'danger')
+        elif len(nueva) < 6:
+            flash('La nueva contraseña debe tener al menos 6 caracteres.', 'danger')
+        elif nueva != confirmacion:
+            flash('La confirmación no coincide con la nueva contraseña.', 'danger')
+        else:
+            conn = get_db()
+            conn.execute('UPDATE usuarios SET password_hash=? WHERE id=?',
+                         (generate_password_hash(nueva), current_user.id))
+            conn.commit()
+            conn.close()
+            flash('Contraseña actualizada correctamente.', 'success')
+
+    return render_template('perfil.html')
+
+
+@app.route('/admin/usuarios/<int:uid>/reset_password', methods=['POST'])
+@login_required
+@admin_required
+def admin_reset_password(uid):
+    DEFAULT_PASS = 'Incovall2026*'
+    conn = get_db()
+    u = conn.execute('SELECT username FROM usuarios WHERE id=?', (uid,)).fetchone()
+    if u is None:
+        conn.close()
+        flash('Usuario no encontrado.', 'danger')
+        return redirect(url_for('admin_usuarios'))
+    conn.execute('UPDATE usuarios SET password_hash=? WHERE id=?',
+                 (generate_password_hash(DEFAULT_PASS), uid))
+    conn.commit()
+    conn.close()
+    flash(f'Contraseña de "{u["username"]}" reseteada a: {DEFAULT_PASS}', 'success')
+    return redirect(url_for('admin_usuarios'))
+
+
 # ─── Main Routes ─────────────────────────────────────────────────────────────
 
 @app.route('/')

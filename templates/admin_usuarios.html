@@ -102,6 +102,12 @@
                     <i class="bi {{ 'bi-person-dash' if u['activo'] else 'bi-person-check' }}"></i>
                   </button>
                 </form>
+                <form method="POST" action="/admin/usuarios/{{ u['id'] }}/reset_password"
+                      onsubmit="return confirm('¿Resetear contraseña de {{ u[\'username\'] }} a Incovall2026*?')">
+                  <button type="submit" class="btn btn-sm btn-outline-warning" title="Resetear contraseña">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                  </button>
+                </form>
                 {% endif %}
               </div>
             </td>
@@ -151,6 +157,12 @@
           <button type="submit"
                   class="btn btn-sm w-100 {{ 'btn-outline-danger' if u['activo'] else 'btn-outline-success' }}">
             {{ 'Desactivar' if u['activo'] else 'Activar' }}
+          </button>
+        </form>
+        <form method="POST" action="/admin/usuarios/{{ u['id'] }}/reset_password"
+              onsubmit="return confirm('¿Resetear contraseña a Incovall2026*?')">
+          <button type="submit" class="btn btn-sm btn-outline-warning" title="Resetear contraseña">
+            <i class="bi bi-arrow-counterclockwise"></i>
           </button>
         </form>
         {% endif %}
