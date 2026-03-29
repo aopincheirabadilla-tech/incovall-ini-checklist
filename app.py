@@ -31,7 +31,7 @@ login_manager.login_view = 'login'
 login_manager.login_message = 'Debes iniciar sesión para acceder.'
 login_manager.login_message_category = 'warning'
 
-ROLES  = ['admin', 'supervisor', 'inspector']
+ROLES  = ['admin', 'supervisor', 'inspector', 'lectura']
 FAENAS = ['PLANTA MAGNETITA', 'CNN', 'PTT']
 ALLOWED_MIME = {'image/jpeg', 'image/png', 'image/webp'}
 
@@ -92,6 +92,17 @@ class User(UserMixin):
     def is_supervisor(self):
         return self.rol in ('admin', 'supervisor')
 
+    def is_lectura(self):
+        return self.rol == 'lectura'
+
+    def puede_ver(self):
+        """Puede acceder a vistas de solo lectura (dashboard, historial, acciones, requerimientos)."""
+        return True  # todos los roles autenticados pueden ver
+
+    def puede_escribir(self):
+        """Puede crear/editar/modificar registros."""
+        return self.rol != 'lectura'
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -111,12 +122,23 @@ def admin_required(f):
     return decorated
 
 
+def escritura_required(f):
+    """Bloquea el acceso a usuarios con rol 'lectura'."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if current_user.is_authenticated and not current_user.puede_escribir():
+            flash('Acceso restringido: su rol es de solo lectura.', 'warning')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated
+
+
 def _puede_ver_inspeccion(insp):
     """True si el usuario actual tiene permiso para ver esta inspección."""
     if current_user.is_admin():
         return True
-    if current_user.rol == 'supervisor':
-        return insp['faena'] == current_user.faena
+    if current_user.rol in ('supervisor', 'lectura'):
+        return insp['faena'] == current_user.faena or current_user.faena is None
     return insp['usuario_id'] == current_user.id
 
 
@@ -496,6 +518,7 @@ def logout():
 
 @app.route('/')
 @login_required
+@escritura_required
 def index():
     correlativo = generate_correlativo()
     today = datetime.now().strftime('%Y-%m-%d')
@@ -508,6 +531,7 @@ def index():
 
 @app.route('/guardar', methods=['POST'])
 @login_required
+@escritura_required
 def guardar():
     data = request.form
     conn = get_db()
@@ -704,8 +728,8 @@ def detalle(inspeccion_id):
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    if not current_user.is_supervisor():
-        flash('Acceso restringido a Supervisores y Administradores.', 'danger')
+    if not current_user.is_supervisor() and not current_user.is_lectura():
+        flash('Acceso restringido a Supervisores, Administradores y usuarios de Solo Lectura.', 'danger')
         return redirect(url_for('index'))
 
     # Filtros
@@ -713,8 +737,8 @@ def dashboard():
     fecha_desde  = request.args.get('fecha_desde', '').strip()
     fecha_hasta  = request.args.get('fecha_hasta', '').strip()
 
-    # Supervisor solo puede ver su propia faena
-    if current_user.rol == 'supervisor':
+    # Supervisor y lectura solo pueden ver su propia faena
+    if current_user.rol in ('supervisor', 'lectura'):
         faena_filter = current_user.faena
 
     # Defaults: mes actual si no hay filtro de fecha
@@ -882,6 +906,7 @@ def accion_detalle(accion_id):
 
 @app.route('/acciones/<int:accion_id>/actualizar', methods=['POST'])
 @login_required
+@escritura_required
 def accion_actualizar(accion_id):
     conn = get_db()
     ac = conn.execute('SELECT * FROM acciones_correctivas WHERE id=?', (accion_id,)).fetchone()
@@ -925,6 +950,7 @@ def accion_actualizar(accion_id):
 
 @app.route('/acciones/<int:accion_id>/asignar', methods=['POST'])
 @login_required
+@escritura_required
 def accion_asignar(accion_id):
     """Asignación desde detalle: responsable, prioridad y fecha límite."""
     responsable_id = request.form.get('responsable_id') or None
@@ -946,8 +972,8 @@ def accion_asignar(accion_id):
 @app.route('/requerimientos')
 @login_required
 def requerimientos():
-    if not current_user.is_supervisor():
-        flash('Acceso restringido a Supervisores y Administradores.', 'danger')
+    if not current_user.is_supervisor() and not current_user.is_lectura():
+        flash('Acceso restringido a Supervisores, Administradores y usuarios de Solo Lectura.', 'danger')
         return redirect(url_for('index'))
 
     faena_f  = request.args.get('faena',  '').strip()
@@ -958,7 +984,7 @@ def requerimientos():
     if faena_f:
         q += ' AND faena=?'
         p.append(faena_f)
-    if current_user.rol == 'supervisor':
+    if current_user.rol in ('supervisor', 'lectura'):
         q += ' AND faena=?'
         p.append(current_user.faena)
     if estado_f:
@@ -972,7 +998,7 @@ def requerimientos():
     # KPIs
     kpi_q  = 'SELECT * FROM requerimientos WHERE estado=\'Pendiente\''
     kpi_p  = []
-    if current_user.rol == 'supervisor':
+    if current_user.rol in ('supervisor', 'lectura'):
         kpi_q += ' AND faena=?'
         kpi_p.append(current_user.faena)
     pendientes_list = conn.execute(kpi_q + ' ORDER BY cantidad DESC', kpi_p).fetchall()
@@ -998,7 +1024,7 @@ def requerimientos():
 @app.route('/requerimientos/exportar')
 @login_required
 def req_exportar():
-    if not current_user.is_supervisor():
+    if not current_user.is_supervisor() and not current_user.is_lectura():
         flash('Acceso restringido.', 'danger')
         return redirect(url_for('index'))
 
@@ -1014,7 +1040,7 @@ def req_exportar():
     if faena_f:
         q += ' AND faena=?'
         p.append(faena_f)
-    if current_user.rol == 'supervisor':
+    if current_user.rol in ('supervisor', 'lectura'):
         q += ' AND faena=?'
         p.append(current_user.faena)
     if estado_f:
@@ -1123,6 +1149,7 @@ def req_exportar():
 
 @app.route('/requerimientos/<int:req_id>/gestionar', methods=['POST'])
 @login_required
+@escritura_required
 def req_gestionar(req_id):
     if not current_user.is_supervisor():
         flash('Acceso restringido.', 'danger')

@@ -94,8 +94,8 @@
 </div>
 
 <!-- ══ Panel de actualización (responsable o supervisor/admin) ════════════════ -->
-{% set puede_actualizar = (ac['responsable_id'] == current_user.id or current_user.is_supervisor()) and ac['estado'] != 'Completada' %}
-{% set puede_asignar = current_user.is_supervisor() %}
+{% set puede_actualizar = not current_user.is_lectura() and (ac['responsable_id'] == current_user.id or current_user.is_supervisor()) and ac['estado'] != 'Completada' %}
+{% set puede_asignar = not current_user.is_lectura() and current_user.is_supervisor() %}
 
 {% if puede_actualizar or puede_asignar %}
 <div class="row g-3 mb-4">

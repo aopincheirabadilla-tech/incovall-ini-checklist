@@ -132,17 +132,19 @@
               </span>
             </td>
             <td class="text-center">
-              {% if r['estado'] == 'Pendiente' %}
+              {% if r['estado'] == 'Pendiente' and not current_user.is_lectura() %}
               <form method="POST" action="/requerimientos/{{ r['id'] }}/gestionar"
                     onsubmit="return confirm('¿Marcar como Gestionado?')">
                 <button type="submit" class="btn btn-sm btn-success">
                   <i class="bi bi-check-lg"></i> Gestionar
                 </button>
               </form>
-              {% else %}
+              {% elif r['estado'] == 'Gestionado' %}
               <span class="text-muted fst-italic small">
                 <i class="bi bi-check-circle-fill text-success me-1"></i>Listo
               </span>
+              {% else %}
+              <span class="text-muted small">—</span>
               {% endif %}
             </td>
           </tr>

@@ -74,8 +74,9 @@
               <span class="badge
                 {% if u['rol'] == 'admin' %}bg-danger
                 {% elif u['rol'] == 'supervisor' %}bg-warning text-dark
+                {% elif u['rol'] == 'lectura' %}bg-info text-dark
                 {% else %}bg-primary{% endif %}">
-                {{ u['rol'] | capitalize }}
+                {% if u['rol'] == 'lectura' %}Solo Lectura{% else %}{{ u['rol'] | capitalize }}{% endif %}
               </span>
             </td>
             <td class="small">{{ u['faena'] or '—' }}</td>
