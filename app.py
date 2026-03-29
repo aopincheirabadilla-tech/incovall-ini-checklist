@@ -273,6 +273,17 @@ def init_db():
             if norm != (row[1] or ''):
                 c.execute(f'UPDATE {tabla} SET faena=? WHERE id=?', (norm, row[0]))
 
+    # Migración: normalizar recinto a Title Case en todas las tablas
+    for tabla, campo in (('inspecciones', 'nombre_recinto'),
+                         ('acciones_correctivas', 'recinto'),
+                         ('requerimientos', 'recinto')):
+        rows = c.execute(f'SELECT id, {campo} FROM {tabla}').fetchall()
+        for row in rows:
+            val = row[1] or ''
+            titled = val.title()
+            if titled != val:
+                c.execute(f'UPDATE {tabla} SET {campo}=? WHERE id=?', (titled, row[0]))
+
     # Admin inicial
     if not c.execute("SELECT id FROM usuarios WHERE username='admin'").fetchone():
         c.execute('''
@@ -412,17 +423,17 @@ def _dashboard_data(faena_filter, fecha_desde, fecha_hasta):
 
     # ── 7. Acciones correctivas ───────────────────────────────────────────────
     ac_wh, ac_wp = [], []
-    if faena_filter: ac_wh.append("faena=?"); ac_wp.append(faena_filter)
+    if faena_filter: ac_wh.append("ac.faena=?"); ac_wp.append(faena_filter)
 
     ac_base = ("WHERE " + " AND ".join(ac_wh)) if ac_wh else ""
     acciones_pendientes = conn.execute(
-        f"SELECT COUNT(*) FROM acciones_correctivas {ac_base} "
-        f"{'AND' if ac_base else 'WHERE'} estado != 'Completada'",
+        f"SELECT COUNT(*) FROM acciones_correctivas ac {ac_base} "
+        f"{'AND' if ac_base else 'WHERE'} ac.estado != 'Completada'",
         ac_wp
     ).fetchone()[0]
 
     today_str = datetime.now().strftime('%Y-%m-%d')
-    ac_venc_wh = list(ac_wh) + ["estado != 'Completada'", "fecha_limite < ?"]
+    ac_venc_wh = list(ac_wh) + ["ac.estado != 'Completada'", "ac.fecha_limite < ?"]
     ac_venc_wp = list(ac_wp) + [today_str]
     acciones_vencidas = conn.execute(
         f"SELECT ac.*, u.nombre_completo AS responsable_nombre "
@@ -511,7 +522,7 @@ def guardar():
             data.get('valle'),
             normalizar_faena(data.get('faena', '')),
             data.get('fecha'),
-            data.get('nombre_recinto'),
+            (data.get('nombre_recinto') or '').title(),
             data.get('nombre_inspector'),
             data.get('cliente'),
             data.get('observaciones'),
@@ -554,7 +565,7 @@ def guardar():
                     VALUES (?,?,?,?,?,?,?,?,?,?)
                 ''', (
                     inspeccion_id, i,
-                    data.get('nombre_recinto', ''),
+                    (data.get('nombre_recinto') or '').title(),
                     normalizar_faena(data.get('faena', '')),
                     item,
                     comentario or f'Ítem "{item}" marcado como NO en inspección {correlativo}',
@@ -567,7 +578,7 @@ def guardar():
                 # Requerimiento: incrementar si existe, crear si no
                 fecha_insp_str = data.get('fecha') or datetime.now().strftime('%Y-%m-%d')
                 req_faena   = normalizar_faena(data.get('faena', ''))
-                req_recinto = data.get('nombre_recinto', '')
+                req_recinto = (data.get('nombre_recinto') or '').title()
                 existing = conn.execute(
                     '''SELECT id FROM requerimientos
                        WHERE item_nombre=? AND faena=? AND recinto=? AND estado='Pendiente' ''',
