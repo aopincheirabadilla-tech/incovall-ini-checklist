@@ -103,7 +103,7 @@
                   </button>
                 </form>
                 <form method="POST" action="/admin/usuarios/{{ u['id'] }}/reset_password"
-                      onsubmit="return confirm('¿Resetear contraseña de {{ u[\'username\'] }} a Incovall2026*?')">
+                      onsubmit="return confirm('¿Resetear contraseña de ' + '{{ u.username }}' + ' a Incovall2026*?')">
                   <button type="submit" class="btn btn-sm btn-outline-warning" title="Resetear contraseña">
                     <i class="bi bi-arrow-counterclockwise"></i>
                   </button>

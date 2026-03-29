@@ -21,7 +21,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.graphics.shapes import Drawing, Rect, String as RLString
 
 app = Flask(__name__)
-app.secret_key = 'incovall-ini-2024-auth'
+app.secret_key = os.environ.get('SECRET_KEY', 'incovall-ini-2024-auth')
 app.config['MAX_CONTENT_LENGTH'] = 80 * 1024 * 1024  # 80 MB total por request
 
 # ─── Flask-Login ─────────────────────────────────────────────────────────────
@@ -145,9 +145,9 @@ def _puede_ver_inspeccion(insp):
 # ─── Config ──────────────────────────────────────────────────────────────────
 
 BASE_DIR   = os.path.dirname(__file__)
-DATABASE   = os.path.join(BASE_DIR, 'inspecciones.db')
+DATABASE   = os.environ.get('DATABASE_PATH', os.path.join(BASE_DIR, 'inspecciones.db'))
 STATIC_DIR = os.path.join(BASE_DIR, 'static')
-FOTOS_DIR  = os.path.join(STATIC_DIR, 'fotos')
+FOTOS_DIR  = os.environ.get('FOTOS_PATH', os.path.join(STATIC_DIR, 'fotos'))
 
 SECCIONES = {
     'SISTEMA SANITARIO': ['WC', 'Lavamanos', 'Duchas', 'Agua Fría', 'Agua Caliente', 'Termo', 'Filtraciones'],
@@ -1612,10 +1612,14 @@ def generate_pdf(insp, items, fotos=None):
     return buf
 
 
+# ─── Startup ─────────────────────────────────────────────────────────────────
+# Se llama aquí para que Gunicorn (que importa el módulo directamente) también
+# inicialice la base de datos al arrancar.
+init_db()
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    init_db()
     import webbrowser, threading
     def open_browser():
         import time; time.sleep(1.2)
