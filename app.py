@@ -1396,6 +1396,33 @@ def anomalia_asignar_fecha(anom_id):
     return redirect(url_for('anomalias'))
 
 
+@app.route('/anomalias/<int:anom_id>/resolver', methods=['POST'])
+@login_required
+def anomalia_resolver(anom_id):
+    if not current_user.is_supervisor():
+        flash('Solo supervisores pueden resolver anomalías manualmente.', 'danger')
+        return redirect(url_for('anomalias'))
+    observacion = request.form.get('observacion', '').strip()
+    today = datetime.now().strftime('%Y-%m-%d')
+    conn = get_db()
+    anom = conn.execute("SELECT id, estado FROM anomalias WHERE id=?", (anom_id,)).fetchone()
+    if not anom or anom['estado'] != 'Pendiente':
+        flash('Anomalía no encontrada o ya resuelta.', 'warning')
+        conn.close()
+        return redirect(url_for('anomalias'))
+    resolucion_texto = observacion or f'Resuelta manualmente por {current_user.nombre_completo}'
+    conn.execute(
+        '''UPDATE anomalias
+           SET estado='Resuelta', fecha_resolucion=?, correlativo_resolucion=?
+           WHERE id=?''',
+        (today, resolucion_texto, anom_id)
+    )
+    conn.commit()
+    conn.close()
+    flash('Anomalía marcada como resuelta.', 'success')
+    return redirect(url_for('anomalias'))
+
+
 # ─── Admin: Gestión de Usuarios ──────────────────────────────────────────────
 
 @app.route('/admin/usuarios')
