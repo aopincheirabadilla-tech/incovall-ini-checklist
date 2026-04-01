@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Anomalías – INCOVALL{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0">
+    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Seguimiento de Anomalías
+  </h4>
+</div>
+
+<!-- ══ KPIs (solo en tab activas) ════════════════════════════════════════════ -->
+{% if tab == 'activas' %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-4">
+    <div class="kpi-card" style="border-left:4px solid #f9a825; background:#fffde7;">
+      <div class="kpi-icon" style="color:#f9a825;"><i class="bi bi-circle-fill"></i></div>
+      <div class="kpi-num" style="color:#f57f17;">{{ n_pendientes }}</div>
+      <div class="kpi-label">🟡 Pendientes</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-card" style="border-left:4px solid #c62828; background:#ffebee;">
+      <div class="kpi-icon" style="color:#c62828;"><i class="bi bi-circle-fill"></i></div>
+      <div class="kpi-num" style="color:#c62828;">{{ n_vencidas }}</div>
+      <div class="kpi-label">🔴 Vencidas</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="kpi-card" style="border-left:4px solid #388e3c; background:#e8f5e9;">
+      <div class="kpi-icon" style="color:#388e3c;"><i class="bi bi-check-circle-fill"></i></div>
+      <div class="kpi-num" style="color:#388e3c;">
+        <a href="/anomalias?tab=resueltas" class="text-decoration-none" style="color:inherit;">
+          <i class="bi bi-arrow-right-circle me-1" style="font-size:.9rem;"></i>Ver
+        </a>
+      </div>
+      <div class="kpi-label">🟢 Resueltas</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══ Tabs ═══════════════════════════════════════════════════════════════════ -->
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'activas' %}active fw-semibold{% endif %}"
+       href="/anomalias?tab=activas{% if faena_f %}&faena={{ faena_f }}{% endif %}">
+      <i class="bi bi-clock-history me-1"></i>Pendientes / Vencidas
+      {% if n_pendientes + n_vencidas > 0 and tab == 'activas' %}
+      <span class="badge bg-danger ms-1">{{ n_pendientes + n_vencidas }}</span>
+      {% endif %}
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'resueltas' %}active fw-semibold{% endif %}"
+       href="/anomalias?tab=resueltas{% if faena_f %}&faena={{ faena_f }}{% endif %}">
+      <i class="bi bi-check2-circle me-1"></i>Resueltas
+    </a>
+  </li>
+</ul>
+
+<!-- ══ Filtros ════════════════════════════════════════════════════════════════ -->
+{% if current_user.is_admin() %}
+<div class="card shadow-sm mb-3" style="background:#f0f4ff; border-color:#bbdefb;">
+  <div class="card-body py-2">
+    <form method="GET" action="/anomalias" class="row g-2 align-items-end">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <div class="col-6 col-md-3">
+        <label class="form-label fw-semibold small mb-1">Faena</label>
+        <select name="faena" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for f in faenas %}
+          <option value="{{ f }}" {{ 'selected' if faena_f == f }}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+          <i class="bi bi-search"></i> Filtrar
+        </button>
+        <a href="/anomalias?tab={{ tab }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-circle"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══ Leyenda ════════════════════════════════════════════════════════════════ -->
+{% if tab == 'activas' %}
+<div class="d-flex gap-3 mb-3 flex-wrap align-items-center small">
+  <span class="fw-semibold text-muted">Estado:</span>
+  <span><span class="badge" style="background:#f9a825;">🟡 Pendiente</span> — dentro de plazo</span>
+  <span><span class="badge bg-danger">🔴 Vencida</span> — fecha de cierre superada</span>
+</div>
+{% endif %}
+
+<!-- ══ Tabla escritorio ════════════════════════════════════════════════════════ -->
+{% if anomalias %}
+<div class="d-none d-md-block">
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead style="background:#1a3a5c; color:white;">
+          <tr>
+            <th>#</th>
+            <th>Ítem</th>
+            <th>Sección</th>
+            <th>Faena</th>
+            <th>Recinto</th>
+            <th>Inspección</th>
+            <th class="text-center">Detección</th>
+            {% if tab == 'activas' %}
+            <th class="text-center">Fecha Cierre</th>
+            <th class="text-center">Estado</th>
+            {% if current_user.is_supervisor() %}
+            <th class="text-center">Asignar Fecha</th>
+            {% endif %}
+            {% else %}
+            <th class="text-center">Resuelta en</th>
+            <th class="text-center">Inspección resolución</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in anomalias %}
+          <tr class="{{ 'table-danger' if a['estado_visual'] == 'Vencida' else ('table-warning' if a['estado_visual'] == 'Pendiente' else 'table-success bg-opacity-25') }}">
+            <td class="text-muted">{{ loop.index }}</td>
+            <td class="fw-semibold">{{ a['item'] }}</td>
+            <td class="text-muted small">{{ a['seccion'] }}</td>
+            <td><span class="badge bg-secondary">{{ a['faena'] or '—' }}</span></td>
+            <td><i class="bi bi-building text-secondary me-1"></i>{{ a['recinto'] or '—' }}</td>
+            <td class="font-monospace small">{{ a['correlativo'] or '—' }}</td>
+            <td class="text-center text-muted">{{ a['fecha_deteccion'] }}</td>
+            {% if tab == 'activas' %}
+            <td class="text-center">
+              {% if a['fecha_cierre'] %}
+                <span class="fw-semibold {{ 'text-danger' if a['estado_visual'] == 'Vencida' else 'text-dark' }}">
+                  {{ a['fecha_cierre'] }}
+                </span>
+              {% else %}
+                <span class="text-muted fst-italic">Sin asignar</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if a['estado_visual'] == 'Vencida' %}
+                <span class="badge bg-danger">🔴 Vencida</span>
+              {% else %}
+                <span class="badge" style="background:#f9a825; color:#000;">🟡 Pendiente</span>
+              {% endif %}
+            </td>
+            {% if current_user.is_supervisor() %}
+            <td class="text-center">
+              <form method="POST" action="/anomalias/{{ a['id'] }}/asignar-fecha"
+                    class="d-flex gap-1 justify-content-center align-items-center">
+                <input type="date" name="fecha_cierre"
+                       value="{{ a['fecha_cierre'] or '' }}"
+                       min="{{ today }}"
+                       class="form-control form-control-sm" style="max-width:140px;"
+                       required>
+                <button type="submit" class="btn btn-sm btn-primary" title="Guardar fecha">
+                  <i class="bi bi-calendar-check"></i>
+                </button>
+              </form>
+            </td>
+            {% endif %}
+            {% else %}
+            <td class="text-center text-success fw-semibold">{{ a['fecha_resolucion'] or '—' }}</td>
+            <td class="text-center font-monospace small">{{ a['correlativo_resolucion'] or '—' }}</td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Tarjetas móvil ══════════════════════════════════════════════════════════ -->
+<div class="d-md-none">
+  {% for a in anomalias %}
+  <div class="card mb-2 shadow-sm
+    {{ 'border-danger' if a['estado_visual'] == 'Vencida' else
+       ('border-warning' if a['estado_visual'] == 'Pendiente' else 'border-success') }}">
+    <div class="card-body py-2 px-3">
+      <!-- Header -->
+      <div class="d-flex justify-content-between align-items-start mb-1">
+        <div class="fw-semibold">{{ a['item'] }}</div>
+        {% if a['estado_visual'] == 'Vencida' %}
+          <span class="badge bg-danger ms-2">🔴 Vencida</span>
+        {% elif a['estado_visual'] == 'Pendiente' %}
+          <span class="badge ms-2" style="background:#f9a825;color:#000;">🟡 Pendiente</span>
+        {% else %}
+          <span class="badge bg-success ms-2">🟢 Resuelta</span>
+        {% endif %}
+      </div>
+      <div class="small text-muted mb-1">
+        <span class="badge bg-secondary me-1">{{ a['faena'] or '—' }}</span>
+        <i class="bi bi-building me-1"></i>{{ a['recinto'] or '—' }}
+      </div>
+      <div class="small text-muted mb-1">
+        <i class="bi bi-file-text me-1"></i>{{ a['correlativo'] or '—' }}
+        &nbsp;·&nbsp;
+        <i class="bi bi-calendar2 me-1"></i>{{ a['fecha_deteccion'] }}
+      </div>
+      {% if tab == 'activas' %}
+      <div class="small mb-2">
+        <strong>Fecha cierre:</strong>
+        {% if a['fecha_cierre'] %}
+          <span class="{{ 'text-danger fw-semibold' if a['estado_visual'] == 'Vencida' else '' }}">
+            {{ a['fecha_cierre'] }}
+          </span>
+        {% else %}
+          <span class="text-muted fst-italic">Sin asignar</span>
+        {% endif %}
+      </div>
+      {% if current_user.is_supervisor() %}
+      <form method="POST" action="/anomalias/{{ a['id'] }}/asignar-fecha"
+            class="d-flex gap-2 align-items-center">
+        <input type="date" name="fecha_cierre"
+               value="{{ a['fecha_cierre'] or '' }}"
+               min="{{ today }}"
+               class="form-control form-control-sm flex-fill" required>
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="bi bi-calendar-check"></i> Guardar
+        </button>
+      </form>
+      {% endif %}
+      {% else %}
+      <div class="small text-success">
+        <i class="bi bi-check-circle-fill me-1"></i>
+        Resuelta el {{ a['fecha_resolucion'] or '—' }}
+        — {{ a['correlativo_resolucion'] or '' }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  {% if tab == 'activas' %}
+  <i class="bi bi-check-circle" style="font-size:3.5rem; color:#2e7d32; opacity:.5;"></i>
+  <p class="mt-2 fs-5">Sin anomalías activas. ¡Todo en orden!</p>
+  {% else %}
+  <i class="bi bi-archive" style="font-size:3.5rem; color:#1565c0; opacity:.4;"></i>
+  <p class="mt-2 fs-5">No hay anomalías resueltas aún.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

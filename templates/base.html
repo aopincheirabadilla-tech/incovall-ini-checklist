@@ -65,6 +65,17 @@
         {% endif %}
       </a>
 
+      <!-- Anomalías -->
+      <a href="/anomalias" class="btn btn-outline-light btn-sm position-relative {% if request.path.startswith('/anomalias') %}active{% endif %}">
+        <i class="bi bi-exclamation-triangle"></i> <span class="d-none d-md-inline">Anomalías</span>
+        {% if anomalias_vencidas_badge > 0 %}
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              style="font-size:0.6rem; min-width:16px; padding:2px 4px;">
+          {{ anomalias_vencidas_badge if anomalias_vencidas_badge < 100 else '99+' }}
+        </span>
+        {% endif %}
+      </a>
+
       {% if current_user.is_supervisor() or current_user.is_lectura() %}
       <a href="/dashboard" class="btn btn-outline-light btn-sm {% if request.path == '/dashboard' %}active{% endif %}">
         <i class="bi bi-bar-chart-line"></i> <span class="d-none d-md-inline">Dashboard</span>
