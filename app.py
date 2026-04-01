@@ -548,7 +548,7 @@ def perfil():
 @login_required
 @admin_required
 def admin_reset_password(uid):
-    DEFAULT_PASS = 'Incovall2026*'
+    DEFAULT_PASS = 'incovall2026'
     conn = get_db()
     u = conn.execute('SELECT username FROM usuarios WHERE id=?', (uid,)).fetchone()
     if u is None:
