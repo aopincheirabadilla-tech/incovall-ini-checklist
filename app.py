@@ -314,6 +314,37 @@ def init_db():
         ''', ('admin', 'Administrador INCOVALL', 'admin@incovall.cl',
               generate_password_hash('incovall2026'), 'admin', None, 1))
 
+    # Seed de usuarios iniciales — INSERT OR IGNORE: si ya existen, no hace nada
+    _DEFAULT_PASS = generate_password_hash('incovall2026')
+    _SEED_USUARIOS = [
+        ('andres.pincheira',      'Andrés Pincheira',    'supervisor', 'PLANTA MAGNETITA'),
+        ('ricardo.bordones',      'Ricardo Bordones',    'supervisor', 'CNN'),
+        ('paolo.rissi',           'Paolo Rissi',         'supervisor', 'PTT'),
+        ('luis.felipe',           'Luis Felipe',         'supervisor', None),
+        ('sebastian.barrientos',  'Sebastián Barrientos','supervisor', None),
+        ('carlos.martinez',       'Carlos Martínez',     'supervisor', None),
+        ('jorge.barraza',         'Jorge Barraza',       'supervisor', None),
+        ('aracelli.herrera',      'Aracelli Herrera',    'inspector',  None),
+        ('eliezer.guerra',        'Eliezer Guerra',      'supervisor', None),
+        ('waldo.huanchicay',      'Waldo Huanchicay',    'supervisor', None),
+        ('carla.vasquez',         'Carla Vásquez',       'lectura',    None),
+        ('roman.toro',            'Román Toro',          'lectura',    None),
+        ('armando.cohen',         'Armando Cohen',       'lectura',    None),
+    ]
+    for username, nombre, rol, faena in _SEED_USUARIOS:
+        existing = c.execute('SELECT id FROM usuarios WHERE username=?', (username,)).fetchone()
+        if existing:
+            # Actualiza rol, faena y activo (deja password intacto)
+            c.execute('''
+                UPDATE usuarios SET nombre_completo=?, rol=?, faena=?, activo=1
+                WHERE username=?
+            ''', (nombre, rol, faena, username))
+        else:
+            c.execute('''
+                INSERT INTO usuarios (username, nombre_completo, email, password_hash, rol, faena, activo)
+                VALUES (?,?,?,?,?,?,?)
+            ''', (username, nombre, None, _DEFAULT_PASS, rol, faena, 1))
+
     conn.commit()
     conn.close()
 
