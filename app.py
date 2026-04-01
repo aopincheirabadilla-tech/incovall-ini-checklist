@@ -287,26 +287,6 @@ def init_db():
         )
     ''')
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS anomalias (
-            id                          INTEGER PRIMARY KEY AUTOINCREMENT,
-            inspeccion_id               INTEGER NOT NULL,
-            item_idx                    INTEGER NOT NULL,
-            seccion                     TEXT NOT NULL,
-            item                        TEXT NOT NULL,
-            faena                       TEXT,
-            recinto                     TEXT,
-            correlativo                 TEXT,
-            fecha_deteccion             TEXT NOT NULL,
-            fecha_cierre                TEXT,
-            estado                      TEXT NOT NULL DEFAULT 'Pendiente',
-            inspeccion_resolucion_id    INTEGER,
-            correlativo_resolucion      TEXT,
-            fecha_resolucion            TEXT,
-            created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (inspeccion_id) REFERENCES inspecciones(id)
-        )
-    ''')
 
     # Migración: normalizar faenas existentes en todas las tablas
     for tabla in ('inspecciones', 'acciones_correctivas', 'requerimientos'):
@@ -673,18 +653,6 @@ def guardar():
                 VALUES (?,?,?,?,?)
             ''', (inspeccion_id, seccion, item, valor, comentario))
 
-            # Resolver anomalías abiertas cuando el ítem se marca SI
-            if valor == 'SI':
-                conn.execute('''
-                    UPDATE anomalias
-                    SET estado='Resuelta',
-                        inspeccion_resolucion_id=?,
-                        correlativo_resolucion=?,
-                        fecha_resolucion=?
-                    WHERE item=? AND recinto=? AND faena=? AND estado='Pendiente'
-                ''', (inspeccion_id, correlativo, fecha_insp_str,
-                      item, req_recinto, req_faena))
-
             # Guardar foto y crear acción correctiva si el valor es NO
             if valor == 'NO':
                 foto_file = request.files.get(f'foto_{i}')
@@ -715,21 +683,6 @@ def guardar():
                     'Alta',
                     'Pendiente',
                 ))
-
-                # Anomalía: crear solo si no existe una abierta para mismo ítem+recinto+faena
-                anom_existe = conn.execute(
-                    '''SELECT id FROM anomalias
-                       WHERE item=? AND recinto=? AND faena=? AND estado='Pendiente' ''',
-                    (item, req_recinto, req_faena)
-                ).fetchone()
-                if not anom_existe:
-                    conn.execute('''
-                        INSERT INTO anomalias
-                            (inspeccion_id, item_idx, seccion, item, faena, recinto,
-                             correlativo, fecha_deteccion, estado)
-                        VALUES (?,?,?,?,?,?,?,?,'Pendiente')
-                    ''', (inspeccion_id, i, seccion, item,
-                          req_faena, req_recinto, correlativo, fecha_insp_str))
 
                 # Requerimiento: incrementar si existe, crear si no
                 existing = conn.execute(
@@ -933,41 +886,11 @@ def _acciones_pendientes_usuario():
     return n
 
 
-def _anomalias_vencidas_count():
-    """Cuenta anomalías vencidas visibles para el usuario actual."""
-    if not current_user.is_authenticated:
-        return 0
-    today = datetime.now().strftime('%Y-%m-%d')
-    conn  = get_db()
-    if current_user.is_admin():
-        n = conn.execute(
-            "SELECT COUNT(*) FROM anomalias "
-            "WHERE estado='Pendiente' AND fecha_cierre IS NOT NULL AND fecha_cierre < ?",
-            (today,)
-        ).fetchone()[0]
-    elif current_user.faena:
-        n = conn.execute(
-            "SELECT COUNT(*) FROM anomalias "
-            "WHERE estado='Pendiente' AND fecha_cierre IS NOT NULL AND fecha_cierre < ? AND faena=?",
-            (today, current_user.faena)
-        ).fetchone()[0]
-    else:
-        n = conn.execute(
-            "SELECT COUNT(*) FROM anomalias "
-            "WHERE estado='Pendiente' AND fecha_cierre IS NOT NULL AND fecha_cierre < ?",
-            (today,)
-        ).fetchone()[0]
-    conn.close()
-    return n
-
-
 # Inyectar contador y utilidades en todos los templates
 @app.context_processor
 def inject_globals():
-    count   = _acciones_pendientes_usuario() if current_user.is_authenticated else 0
-    venc    = _anomalias_vencidas_count()    if current_user.is_authenticated else 0
+    count = _acciones_pendientes_usuario() if current_user.is_authenticated else 0
     return {'acciones_pendientes_badge': count,
-            'anomalias_vencidas_badge':  venc,
             'normalizar_faena':          normalizar_faena}
 
 
@@ -1323,105 +1246,6 @@ def req_gestionar(req_id):
 
 
 # ─── Anomalías ───────────────────────────────────────────────────────────────
-
-@app.route('/anomalias')
-@login_required
-def anomalias():
-    tab     = request.args.get('tab', 'activas')   # 'activas' | 'resueltas'
-    faena_f = request.args.get('faena', '').strip()
-    today   = datetime.now().strftime('%Y-%m-%d')
-
-    q  = "SELECT * FROM anomalias WHERE 1=1"
-    p  = []
-
-    # Filtro por rol / faena
-    if not current_user.is_admin() and current_user.faena:
-        q += " AND faena=?"
-        p.append(current_user.faena)
-    elif faena_f:
-        q += " AND faena=?"
-        p.append(faena_f)
-
-    if tab == 'resueltas':
-        q += " AND estado='Resuelta' ORDER BY fecha_resolucion DESC"
-    else:
-        q += " AND estado='Pendiente' ORDER BY CASE WHEN fecha_cierre IS NOT NULL AND fecha_cierre < ? THEN 0 ELSE 1 END, fecha_cierre ASC NULLS LAST"
-        p.insert(len(p), today)   # para el CASE
-
-    conn  = get_db()
-    rows  = conn.execute(q, p).fetchall()
-    conn.close()
-
-    # Calcular estado visual en Python (PENDIENTE / VENCIDA)
-    activas = []
-    for r in rows:
-        d = dict(r)
-        if tab == 'activas':
-            if d['fecha_cierre'] and d['fecha_cierre'] < today:
-                d['estado_visual'] = 'Vencida'
-            else:
-                d['estado_visual'] = 'Pendiente'
-        else:
-            d['estado_visual'] = 'Resuelta'
-        activas.append(d)
-
-    n_pendientes = sum(1 for a in activas if a['estado_visual'] == 'Pendiente') if tab == 'activas' else 0
-    n_vencidas   = sum(1 for a in activas if a['estado_visual'] == 'Vencida')   if tab == 'activas' else 0
-
-    return render_template('anomalias.html',
-                           anomalias=activas,
-                           tab=tab,
-                           faena_f=faena_f,
-                           faenas=FAENAS,
-                           today=today,
-                           n_pendientes=n_pendientes,
-                           n_vencidas=n_vencidas)
-
-
-@app.route('/anomalias/<int:anom_id>/asignar-fecha', methods=['POST'])
-@login_required
-def anomalia_asignar_fecha(anom_id):
-    if not current_user.is_supervisor():
-        flash('Solo supervisores pueden asignar fecha de cierre.', 'danger')
-        return redirect(url_for('anomalias'))
-    fecha = request.form.get('fecha_cierre', '').strip()
-    if not fecha:
-        flash('Debes ingresar una fecha de cierre.', 'danger')
-        return redirect(url_for('anomalias'))
-    conn = get_db()
-    conn.execute("UPDATE anomalias SET fecha_cierre=? WHERE id=?", (fecha, anom_id))
-    conn.commit()
-    conn.close()
-    flash('Fecha de cierre asignada correctamente.', 'success')
-    return redirect(url_for('anomalias'))
-
-
-@app.route('/anomalias/<int:anom_id>/resolver', methods=['POST'])
-@login_required
-def anomalia_resolver(anom_id):
-    if not current_user.is_supervisor():
-        flash('Solo supervisores pueden resolver anomalías manualmente.', 'danger')
-        return redirect(url_for('anomalias'))
-    observacion = request.form.get('observacion', '').strip()
-    today = datetime.now().strftime('%Y-%m-%d')
-    conn = get_db()
-    anom = conn.execute("SELECT id, estado FROM anomalias WHERE id=?", (anom_id,)).fetchone()
-    if not anom or anom['estado'] != 'Pendiente':
-        flash('Anomalía no encontrada o ya resuelta.', 'warning')
-        conn.close()
-        return redirect(url_for('anomalias'))
-    resolucion_texto = observacion or f'Resuelta manualmente por {current_user.nombre_completo}'
-    conn.execute(
-        '''UPDATE anomalias
-           SET estado='Resuelta', fecha_resolucion=?, correlativo_resolucion=?
-           WHERE id=?''',
-        (today, resolucion_texto, anom_id)
-    )
-    conn.commit()
-    conn.close()
-    flash('Anomalía marcada como resuelta.', 'success')
-    return redirect(url_for('anomalias'))
-
 
 # ─── Admin: Gestión de Usuarios ──────────────────────────────────────────────
 
